@@ -1,0 +1,37 @@
+name: emergency_resource_locator
+description: Emergency Resource Locator - Find nearest hospitals, police, and ambulances
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI and Material Design
+  cupertino_icons: ^1.0.2
+  
+  # Map functionality with OpenStreetMap
+  flutter_map: ^6.0.1
+  latlong2: ^0.9.1
+  
+  # HTTP requests (for future use, optional for now)
+  http: ^1.1.0
+  
+  # Local data and JSON parsing
+  path_provider: ^2.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # Include assets folder for dummy data
+  assets:
+    - assets/data/
+    - assets/images/
