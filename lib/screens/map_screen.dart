@@ -18,8 +18,8 @@ class _MapScreenState extends State<MapScreen> {
   bool _isLoading = true;
   String _serviceType = '';
 
-  // Default map center (New York City area)
-  final LatLng _mapCenter = const LatLng(40.7128, -74.0060);
+  // Mumbai city center coordinates
+  final LatLng _mapCenter = const LatLng(19.0760, 72.8777);
 
   @override
   void didChangeDependencies() {
@@ -85,7 +85,7 @@ class _MapScreenState extends State<MapScreen> {
                       mapController: _mapController,
                       options: MapOptions(
                         initialCenter: _mapCenter,
-                        initialZoom: 12.0,
+                        initialZoom: 11.0, // Adjusted for Mumbai city view
                         minZoom: 8.0,
                         maxZoom: 18.0,
                       ),
@@ -187,7 +187,7 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '${_providers.length} providers shown',
+                  '${_providers.length} providers in Mumbai',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -243,7 +243,7 @@ class _MapScreenState extends State<MapScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
-                                    '${provider.distance.toStringAsFixed(1)} km',
+                                    '${provider.distance.toStringAsFixed(1)} km away',
                                     style: TextStyle(
                                       color: Colors.grey[600],
                                       fontSize: 10,
@@ -290,7 +290,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Select a service type to view providers',
+              'Select a service type to view providers in Mumbai',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey[500],
@@ -530,13 +530,13 @@ class _MapScreenState extends State<MapScreen> {
   String _getMapTitle() {
     switch (_serviceType.toLowerCase()) {
       case 'hospital':
-        return 'Hospitals Map';
+        return 'Mumbai Hospitals';
       case 'police':
-        return 'Police Stations Map';
+        return 'Mumbai Police Stations';
       case 'ambulance':
-        return 'Ambulance Services Map';
+        return 'Mumbai Ambulance Services';
       default:
-        return 'Emergency Services Map';
+        return 'Mumbai Emergency Services';
     }
   }
 
@@ -574,7 +574,10 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Call Provider'),
-        content: Text('Call ${provider.name} at ${provider.phone}?\n\nThis is a demo app - no actual call will be made.'),
+        content: Text(
+          'Call ${provider.name} at ${provider.phone}?\n\n'
+          'This is a demo app - no actual call will be made.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
