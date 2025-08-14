@@ -48,7 +48,7 @@ class ServiceSelectionScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 40),
-            
+
             // Service type cards
             Expanded(
               child: Column(
@@ -63,7 +63,7 @@ class ServiceSelectionScreen extends StatelessWidget {
                     description: 'Emergency rooms, doctors, medical care',
                   ),
                   const SizedBox(height: 16),
-                  
+
                   _buildServiceCard(
                     context: context,
                     title: 'Police',
@@ -74,7 +74,7 @@ class ServiceSelectionScreen extends StatelessWidget {
                     description: 'Crime reporting, accidents, public safety',
                   ),
                   const SizedBox(height: 16),
-                  
+
                   _buildServiceCard(
                     context: context,
                     title: 'Ambulance',
@@ -84,10 +84,20 @@ class ServiceSelectionScreen extends StatelessWidget {
                     color: Colors.orange,
                     description: 'Paramedics, medical transport, life support',
                   ),
+                  const SizedBox(height: 16),
+                  _buildServiceCard(
+                    context: context,
+                    title: 'Fire Brigade',
+                    subtitle: 'Fire & rescue services',
+                    icon: '🔥',
+                    serviceType: 'fire',
+                    color: Colors.deepOrange,
+                    description: 'Fire outbreaks and rescue operations',
+                  ),
                 ],
               ),
             ),
-            
+
             // Emergency contact info
             Container(
               padding: const EdgeInsets.all(16),
@@ -116,7 +126,7 @@ class ServiceSelectionScreen extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Call 911 immediately for fastest response',
+                          'Call 112 immediately for fastest response',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.red[600],
@@ -134,7 +144,7 @@ class ServiceSelectionScreen extends StatelessWidget {
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     ),
-                    child: const Text('Call 911'),
+                    child: const Text('Call 112'),
                   ),
                 ],
               ),
@@ -190,7 +200,7 @@ class ServiceSelectionScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              
+
               // Service info
               Expanded(
                 child: Column(
@@ -223,7 +233,7 @@ class ServiceSelectionScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              
+
               // Arrow icon
               Container(
                 padding: const EdgeInsets.all(8),
@@ -257,7 +267,7 @@ class ServiceSelectionScreen extends StatelessWidget {
           ],
         ),
         content: const Text(
-          'This is a demo app. In a real emergency, you would be connected to 911 emergency services.\n\nFor life-threatening emergencies, always call 911 directly.',
+          'This is a demo app. In a real emergency, you would be connected to 112 emergency services.\n\nFor life-threatening emergencies, always call 112 directly.',
         ),
         actions: [
           TextButton(
