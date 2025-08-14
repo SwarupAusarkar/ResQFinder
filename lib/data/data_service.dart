@@ -12,8 +12,8 @@ class DataService {
   static Future<List<Provider>> loadProviders() async {
     if (_providers.isEmpty) {
       try {
-        // Load JSON file from assets (note: using providers.json, not providors.json)
-        final String jsonString = await rootBundle.loadString('assets/data/providers.json');
+        // Load JSON file from assets (fixed filename to match the actual file)
+        final String jsonString = await rootBundle.loadString('assets/data/providors.json');
         final Map<String, dynamic> jsonData = json.decode(jsonString);
         
         // Parse providers list
@@ -31,7 +31,7 @@ class DataService {
   static Future<List<EmergencyRequest>> loadRequests() async {
     if (_requests.isEmpty) {
       try {
-        final String jsonString = await rootBundle.loadString('assets/data/providers.json');
+        final String jsonString = await rootBundle.loadString('assets/data/providors.json');
         final Map<String, dynamic> jsonData = json.decode(jsonString);
         
         // Parse requests list
@@ -73,6 +73,65 @@ class DataService {
   static List<Provider> sortProvidersByDistance(List<Provider> providers) {
     providers.sort((a, b) => a.distance.compareTo(b.distance));
     return providers;
+  }
+
+  // Sort providers by rating (highest first)
+  static List<Provider> sortProvidersByRating(List<Provider> providers) {
+    providers.sort((a, b) => b.rating.compareTo(a.rating));
+    return providers;
+  }
+
+  // Sort providers by availability (available first)
+  static List<Provider> sortProvidersByAvailability(List<Provider> providers) {
+    providers.sort((a, b) {
+      if (a.isAvailable == b.isAvailable) return 0;
+      return a.isAvailable ? -1 : 1;
+    });
+    return providers;
+  }
+
+  // Get nearest providers within a certain radius
+  static Future<List<Provider>> getNearestProviders(
+    String serviceType, 
+    double maxDistance,
+  ) async {
+    final providers = await getProvidersByType(serviceType);
+    return providers
+        .where((provider) => provider.distance <= maxDistance)
+        .toList();
+  }
+
+  // Search providers by name or address
+  static Future<List<Provider>> searchProviders(String query) async {
+    final allProviders = await loadProviders();
+    final lowerQuery = query.toLowerCase();
+    
+    return allProviders.where((provider) =>
+        provider.name.toLowerCase().contains(lowerQuery) ||
+        provider.address.toLowerCase().contains(lowerQuery) ||
+        provider.type.toLowerCase().contains(lowerQuery)
+    ).toList();
+  }
+
+  // Get providers statistics
+  static Future<Map<String, dynamic>> getProvidersStats() async {
+    final allProviders = await loadProviders();
+    final available = allProviders.where((p) => p.isAvailable).length;
+    final hospitals = allProviders.where((p) => p.type == 'hospital').length;
+    final police = allProviders.where((p) => p.type == 'police').length;
+    final ambulances = allProviders.where((p) => p.type == 'ambulance').length;
+    
+    return {
+      'total': allProviders.length,
+      'available': available,
+      'busy': allProviders.length - available,
+      'hospitals': hospitals,
+      'police': police,
+      'ambulances': ambulances,
+      'averageRating': allProviders.isEmpty 
+          ? 0.0 
+          : allProviders.map((p) => p.rating).reduce((a, b) => a + b) / allProviders.length,
+    };
   }
 
   // Fallback providers in case JSON loading fails
@@ -150,5 +209,31 @@ class DataService {
         priority: 'medium',
       ),
     ];
+  }
+
+  // Clear cache (useful for testing or refresh)
+  static void clearCache() {
+    _providers.clear();
+    _requests.clear();
+  }
+
+  // Mock method to update provider availability (for demo purposes)
+  static void updateProviderAvailability(String providerId, bool isAvailable) {
+    final index = _providers.indexWhere((p) => p.id == providerId);
+    if (index != -1) {
+      _providers[index] = Provider(
+        id: _providers[index].id,
+        name: _providers[index].name,
+        type: _providers[index].type,
+        phone: _providers[index].phone,
+        address: _providers[index].address,
+        latitude: _providers[index].latitude,
+        longitude: _providers[index].longitude,
+        distance: _providers[index].distance,
+        isAvailable: isAvailable,
+        rating: _providers[index].rating,
+        description: _providers[index].description,
+      );
+    }
   }
 }
