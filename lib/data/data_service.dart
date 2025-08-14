@@ -13,7 +13,7 @@ class DataService {
     if (_providers.isEmpty) {
       try {
         // Load JSON file from assets (fixed filename to match the actual file)
-        final String jsonString = await rootBundle.loadString('assets/data/providors.json');
+        final String jsonString = await rootBundle.loadString('assets/data/providers.json');
         final Map<String, dynamic> jsonData = json.decode(jsonString);
         
         // Parse providers list

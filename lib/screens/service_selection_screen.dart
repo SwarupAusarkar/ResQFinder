@@ -24,34 +24,34 @@ class ServiceSelectionScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header section
-            const Text(
-              'What type of emergency\nservice do you need?',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                height: 1.3,
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header section
+              const Text(
+                'What type of emergency\nservice do you need?',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  height: 1.3,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Select the appropriate service and we\'ll find the nearest available providers.',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-                height: 1.4,
+              const SizedBox(height: 8),
+              Text(
+                'Select the appropriate service and we\'ll find the nearest available providers.',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                  height: 1.4,
+                ),
               ),
-            ),
-            const SizedBox(height: 40),
+              const SizedBox(height: 40),
 
-            // Service type cards
-            Expanded(
-              child: Column(
+              // Service type cards
+              Column(
                 children: [
                   _buildServiceCard(
                     context: context,
@@ -96,60 +96,62 @@ class ServiceSelectionScreen extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
 
-            // Emergency contact info
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.red[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.red[200]!),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    color: Colors.red[700],
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Life-threatening emergency?',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red[700],
-                          ),
-                        ),
-                        Text(
-                          'Call 112 immediately for fastest response',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.red[600],
-                          ),
-                        ),
-                      ],
+              const SizedBox(height: 24),
+
+              // Emergency contact info
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.red[700],
+                      size: 24,
                     ),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      _showEmergencyDialog(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Life-threatening emergency?',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red[700],
+                            ),
+                          ),
+                          Text(
+                            'Call 112 immediately for fastest response',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.red[600],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: const Text('Call 112'),
-                  ),
-                ],
+                    ElevatedButton(
+                      onPressed: () {
+                        _showEmergencyDialog(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                      child: const Text('Call 112'),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
