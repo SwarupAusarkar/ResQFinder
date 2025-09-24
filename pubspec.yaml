@@ -16,6 +16,7 @@ dependencies:
   # Map functionality with OpenStreetMap
   flutter_map: ^6.0.1
   latlong2: ^0.9.1
+  geolocator: ^10.1.0
   
   # HTTP requests (for future use, optional for now)
   http: ^1.1.0

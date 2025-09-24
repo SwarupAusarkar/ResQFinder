@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/service_selection_screen.dart';
@@ -7,7 +8,12 @@ import 'screens/provider_details_screen.dart';
 import 'screens/map_screen.dart';
 import 'screens/provider_dashboard_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Request location permissions on app start
+  await Geolocator.requestPermission();
+  
   runApp(const EmergencyResourceLocatorApp());
 }
 
