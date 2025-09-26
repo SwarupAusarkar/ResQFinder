@@ -41,7 +41,7 @@ class ServiceSelectionScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Select the appropriate service and we\'ll find the nearest available providers.',
+                'Select the appropriate service and we\'ll find the nearest available providers in Mumbai.',
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.grey[600],
@@ -84,20 +84,46 @@ class ServiceSelectionScreen extends StatelessWidget {
                     color: Colors.orange,
                     description: 'Paramedics, medical transport, life support',
                   ),
-                  const SizedBox(height: 16),
-                  _buildServiceCard(
-                    context: context,
-                    title: 'Fire Brigade',
-                    subtitle: 'Fire & rescue services',
-                    icon: '🔥',
-                    serviceType: 'fire',
-                    color: Colors.deepOrange,
-                    description: 'Fire outbreaks and rescue operations',
-                  ),
                 ],
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
+
+              // Indian Emergency Numbers Info Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue[200]!),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.blue[700]),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Emergency Numbers in India',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue[700],
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildEmergencyNumber('112', 'All Emergency Services', Icons.emergency),
+                    _buildEmergencyNumber('100', 'Police', Icons.local_police),
+                    _buildEmergencyNumber('101', 'Fire Department', Icons.local_fire_department),
+                    _buildEmergencyNumber('108', 'Ambulance', Icons.local_hospital),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
 
               // Emergency contact info
               Container(
@@ -153,6 +179,34 @@ class ServiceSelectionScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // Build emergency number info row
+  Widget _buildEmergencyNumber(String number, String service, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.blue[600]),
+          const SizedBox(width: 8),
+          Text(
+            number,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '- $service',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[700],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -269,7 +323,13 @@ class ServiceSelectionScreen extends StatelessWidget {
           ],
         ),
         content: const Text(
-          'This is a demo app. In a real emergency, you would be connected to 112 emergency services.\n\nFor life-threatening emergencies, always call 112 directly.',
+          'This is a demo app. In a real emergency, you would be connected to 112 emergency services.\n\n'
+          'Indian Emergency Numbers:\n'
+          '• 112 - All Emergency Services\n'
+          '• 100 - Police\n'
+          '• 101 - Fire Department\n'
+          '• 108 - Ambulance\n\n'
+          'For life-threatening emergencies, always call 112 directly.',
         ),
         actions: [
           TextButton(

@@ -12,7 +12,7 @@ class DataService {
   static Future<List<Provider>> loadProviders() async {
     if (_providers.isEmpty) {
       try {
-        // Load JSON file from assets (fixed filename to match the actual file)
+        // Load JSON file from assets (consistent filename)
         final String jsonString = await rootBundle.loadString('assets/data/providers.json');
         final Map<String, dynamic> jsonData = json.decode(jsonString);
         
@@ -31,7 +31,8 @@ class DataService {
   static Future<List<EmergencyRequest>> loadRequests() async {
     if (_requests.isEmpty) {
       try {
-        final String jsonString = await rootBundle.loadString('assets/data/providors.json');
+        // Use same file for consistency
+        final String jsonString = await rootBundle.loadString('assets/data/providers.json');
         final Map<String, dynamic> jsonData = json.decode(jsonString);
         
         // Parse requests list
@@ -134,79 +135,79 @@ class DataService {
     };
   }
 
-  // Fallback providers in case JSON loading fails
+  // Fallback providers with Mumbai data
   static List<Provider> _getFallbackProviders() {
     return [
       Provider(
         id: 'h001',
-        name: 'City General Hospital',
+        name: 'King Edward Memorial Hospital',
         type: 'hospital',
-        phone: '+1-555-0101',
-        address: '123 Main St, Downtown',
-        latitude: 40.7128,
-        longitude: -74.0060,
+        phone: '+91-22-2410-7000',
+        address: 'Acharya Donde Marg, Parel, Mumbai, Maharashtra 400012',
+        latitude: 19.0176,
+        longitude: 72.8443,
         distance: 2.5,
         isAvailable: true,
-        rating: 4,
-        description: '24/7 emergency care with specialist doctors.',
+        rating: 5,
+        description: 'Major government hospital with 24/7 emergency services.',
       ),
       Provider(
         id: 'p001',
-        name: 'Downtown Police Station',
+        name: 'Bandra Police Station',
         type: 'police',
-        phone: '+1-555-0201',
-        address: '100 Police Plaza, Downtown',
-        latitude: 40.7122,
-        longitude: -74.0055,
-        distance: 2.1,
+        phone: '+91-22-2640-5020',
+        address: 'Turner Road, Bandra West, Mumbai, Maharashtra 400050',
+        latitude: 19.0544,
+        longitude: 72.8266,
+        distance: 1.2,
         isAvailable: true,
         rating: 4,
-        description: 'Main police station with 24/7 response.',
+        description: 'Main police station serving Bandra area with 24/7 response.',
       ),
       Provider(
         id: 'a001',
-        name: 'City Ambulance Service',
+        name: '108 Emergency Ambulance Service',
         type: 'ambulance',
-        phone: '+1-555-0301',
-        address: 'Emergency Services Building, Downtown',
-        latitude: 40.7128,
-        longitude: -74.0060,
-        distance: 1.2,
+        phone: '108',
+        address: 'MCGM Emergency Services, Dadar, Mumbai, Maharashtra 400014',
+        latitude: 19.0178,
+        longitude: 72.8478,
+        distance: 1.5,
         isAvailable: true,
         rating: 5,
-        description: 'Advanced life support ambulance service.',
+        description: 'Government emergency ambulance service providing free medical transport.',
       ),
     ];
   }
 
-  // Fallback requests in case JSON loading fails
+  // Fallback requests with Mumbai data
   static List<EmergencyRequest> _getFallbackRequests() {
     return [
       EmergencyRequest(
         id: 'r001',
-        requesterName: 'John Doe',
-        requesterPhone: '+1-555-1001',
+        requesterName: 'Rajesh Kumar',
+        requesterPhone: '+91-98765-43210',
         serviceType: 'ambulance',
-        description: 'Chest pain, need immediate attention',
-        latitude: 40.7128,
-        longitude: -74.0060,
-        address: '123 Emergency St, Downtown',
+        description: 'Heart attack symptoms, need immediate medical attention',
+        latitude: 19.0596,
+        longitude: 72.8295,
+        address: 'Linking Road, Bandra West, Mumbai, Maharashtra 400050',
         timestamp: DateTime.now().subtract(const Duration(minutes: 15)),
         status: 'pending',
         priority: 'critical',
       ),
       EmergencyRequest(
         id: 'r002',
-        requesterName: 'Jane Smith',
-        requesterPhone: '+1-555-1002',
+        requesterName: 'Priya Sharma',
+        requesterPhone: '+91-87654-32109',
         serviceType: 'police',
-        description: 'Car accident on Main Street, minor injuries',
-        latitude: 40.7589,
-        longitude: -73.9851,
-        address: '456 Main Street, Midtown',
+        description: 'Road accident near Bandra-Kurla Complex, multiple vehicles involved',
+        latitude: 19.0728,
+        longitude: 72.8826,
+        address: 'Bandra Kurla Complex, Bandra East, Mumbai, Maharashtra 400051',
         timestamp: DateTime.now().subtract(const Duration(minutes: 30)),
         status: 'pending',
-        priority: 'medium',
+        priority: 'high',
       ),
     ];
   }

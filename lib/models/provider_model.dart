@@ -7,7 +7,7 @@ class Provider {
   final String address;
   final double latitude;
   final double longitude;
-  final double distance; // Distance from user in km
+  double distance; // Made non-final to allow live distance calculation
   final bool isAvailable;
   final int rating; // Rating out of 5
   final String description;
@@ -42,6 +42,24 @@ class Provider {
       description: json['description'] ?? '',
     );
   }
+  
+  // Method to create a copy of the instance with updated distance
+  Provider copyWith({double? distance}) {
+    return Provider(
+      id: this.id,
+      name: this.name,
+      type: this.type,
+      phone: this.phone,
+      address: this.address,
+      latitude: this.latitude,
+      longitude: this.longitude,
+      distance: distance ?? this.distance,
+      isAvailable: this.isAvailable,
+      rating: this.rating,
+      description: this.description,
+    );
+  }
+
 
   // Convert Provider object to JSON
   Map<String, dynamic> toJson() {
