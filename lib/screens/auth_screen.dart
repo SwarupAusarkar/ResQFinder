@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart'; // Import the new AuthService
 
-// Mock authentication screen for both user types
+// Enum to manage Login or Register mode
+enum AuthMode { login, register }
+
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -10,13 +13,19 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _authService = AuthService();
+
+  final _fullNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+
+  AuthMode _authMode = AuthMode.login;
   bool _isLoading = false;
   bool _obscurePassword = true;
 
   @override
   void dispose() {
+    _fullNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -30,7 +39,7 @@ class _AuthScreenState extends State<AuthScreen> {
     
     return Scaffold(
       appBar: AppBar(
-        title: Text(userType == 'requester' ? 'Sign In - Need Help' : 'Sign In - Provider'),
+        title: Text(_authMode == AuthMode.login ? 'Sign In' : 'Register'),
         backgroundColor: userType == 'requester' ? Colors.blue : Colors.green,
         foregroundColor: Colors.white,
       ),
@@ -45,27 +54,38 @@ class _AuthScreenState extends State<AuthScreen> {
               
               // Welcome message
               Text(
-                userType == 'requester' 
-                    ? 'Welcome Back!' 
-                    : 'Provider Portal',
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
+                _authMode == AuthMode.login ? 'Welcome Back!' : 'Create an Account',
+                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
                 userType == 'requester' 
-                    ? 'Sign in to find emergency services near you'
-                    : 'Sign in to respond to emergency requests',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
+                    ? 'to find emergency services near you'
+                    : 'to respond to emergency requests',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 40),
+
+              // Full Name field (only for registration)
+              if (_authMode == AuthMode.register) ...[
+                TextFormField(
+                  controller: _fullNameController,
+                  decoration: InputDecoration(
+                    labelText: 'Full Name',
+                    prefixIcon: const Icon(Icons.person_outline),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your full name';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
               
               // Email field
               TextFormField(
@@ -73,17 +93,11 @@ class _AuthScreenState extends State<AuthScreen> {
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   labelText: 'Email Address',
-                  hintText: 'Enter your email',
                   prefixIcon: const Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your email';
-                  }
-                  if (!value.contains('@')) {
+                  if (value == null || !value.contains('@')) {
                     return 'Please enter a valid email';
                   }
                   return null;
@@ -97,27 +111,15 @@ class _AuthScreenState extends State<AuthScreen> {
                 obscureText: _obscurePassword,
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  hintText: 'Enter your password',
                   prefixIcon: const Icon(Icons.lock_outlined),
                   suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
+                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                   ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your password';
-                  }
-                  if (value.length < 6) {
+                  if (value == null || value.length < 6) {
                     return 'Password must be at least 6 characters';
                   }
                   return null;
@@ -125,97 +127,36 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 24),
               
-              // Sign in button
+              // Submit button
               ElevatedButton(
-                onPressed: _isLoading ? null : () => _handleSignIn(userType),
+                onPressed: _isLoading ? null : () => _handleSubmit(userType),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: userType == 'requester' ? Colors.blue : Colors.green,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Text(
-                        'Sign In',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    ? const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white))
+                    : Text(
+                        _authMode == AuthMode.login ? 'Sign In' : 'Register',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
-              ),
-              const SizedBox(height: 16),
-              
-              // Demo credentials info
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey[300]!),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Demo Credentials:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Email: demo@example.com',
-                      style: TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                    ),
-                    const Text(
-                      'Password: demo123',
-                      style: TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Or use any email and password (6+ chars)',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                ),
               ),
               const SizedBox(height: 24),
               
-              // Footer links
+              // Toggle between Login and Register
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  Text(_authMode == AuthMode.login ? 'Don\'t have an account?' : 'Already have an account?'),
                   TextButton(
                     onPressed: () {
-                      // Mock forgot password
-                      _showInfoDialog('Forgot Password', 
-                          'This is a demo app. Use any credentials to continue.');
+                      setState(() {
+                        _authMode = _authMode == AuthMode.login ? AuthMode.register : AuthMode.login;
+                      });
                     },
-                    child: const Text('Forgot Password?'),
-                  ),
-                  const Text(' | '),
-                  TextButton(
-                    onPressed: () {
-                      // Mock create account
-                      _showInfoDialog('Create Account', 
-                          'This is a demo app. Use the sign in button to continue.');
-                    },
-                    child: const Text('Create Account'),
+                    child: Text(_authMode == AuthMode.login ? 'Register' : 'Sign In'),
                   ),
                 ],
               ),
@@ -226,45 +167,49 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  // Handle mock sign in process
-  Future<void> _handleSignIn(String userType) async {
+  // Handle form submission
+  Future<void> _handleSubmit(String userType) async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
-    // Simulate authentication delay
-    await Future.delayed(const Duration(seconds: 2));
-
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      // Navigate based on user type
-      if (userType == 'requester') {
-        Navigator.pushReplacementNamed(context, '/service-selection');
+    try {
+      if (_authMode == AuthMode.login) {
+        await _authService.signIn(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
       } else {
-        Navigator.pushReplacementNamed(context, '/provider-dashboard');
+        await _authService.signUp(
+          fullName: _fullNameController.text.trim(),
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+          userType: userType,
+        );
+      }
+      
+      // On success, the AuthWrapper will handle navigation
+      if (mounted) {
+        final user = _authService.currentUser;
+        final userTypeFromDb = await _authService.getUserType(user!.uid);
+
+        if(userTypeFromDb == 'requester') {
+            Navigator.pushReplacementNamed(context, '/service-selection');
+        } else {
+            Navigator.pushReplacementNamed(context, '/provider-dashboard');
+        }
+      }
+
+    } catch (e) {
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Authentication Failed: ${e.toString()}'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if(mounted) {
+        setState(() => _isLoading = false);
       }
     }
-  }
-
-  // Show information dialog
-  void _showInfoDialog(String title, String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
   }
 }

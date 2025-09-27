@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:firebase_core/firebase_core.dart'; 
+import 'widgets/auth_wrapper.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/service_selection_screen.dart';
@@ -9,11 +11,15 @@ import 'screens/map_screen.dart';
 import 'screens/provider_dashboard_screen.dart';
 
 void main() async {
+  // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  // Initialize Firebase
+  await Firebase.initializeApp();
+
   // Request location permissions on app start
   await Geolocator.requestPermission();
-  
+
   runApp(const EmergencyResourceLocatorApp());
 }
 
@@ -25,8 +31,6 @@ class EmergencyResourceLocatorApp extends StatelessWidget {
     return MaterialApp(
       title: 'Emergency Resource Locator',
       debugShowCheckedModeBanner: false,
-      
-      // Material 3 theme with blue and green colors
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -53,11 +57,12 @@ class EmergencyResourceLocatorApp extends StatelessWidget {
           ),
         ),
       ),
-      
-      // Define all app routes
-      initialRoute: '/',
+
+      // Use AuthWrapper as the home, which will handle routing
+      home: const AuthWrapper(),
       routes: {
-        '/': (context) => const HomeScreen(),
+        // Keep other routes for navigation from within the app
+        '/home': (context) => const HomeScreen(),
         '/auth': (context) => const AuthScreen(),
         '/service-selection': (context) => const ServiceSelectionScreen(),
         '/provider-list': (context) => const ProviderListScreen(),
