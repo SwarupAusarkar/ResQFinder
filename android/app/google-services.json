@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "722428138353",
+    "project_id": "emergency-resource-locat-1a102",
+    "storage_bucket": "emergency-resource-locat-1a102.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:722428138353:android:1a74f4f5da0eef03639cd0",
+        "android_client_info": {
+          "package_name": "com.example.emergency_resource_locator"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC29asADbQ1zHN57qMCzMPuK552kAyPCzs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
