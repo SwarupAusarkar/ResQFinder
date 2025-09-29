@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'provider_registration_screen.dart';
+import 'service_selection_screen.dart';
 
 // Home screen where users choose between Requester and Provider roles
 class HomeScreen extends StatelessWidget {
@@ -119,14 +121,23 @@ class HomeScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: InkWell(
-        onTap: () {
-          // Navigate to auth screen with user type parameter
-          Navigator.pushNamed(
-            context,
-            '/auth',
-            arguments: {'userType': userType},
-          );
-        },
+          onTap: () {
+            if (userType == 'provider') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ProviderRegistrationScreen(),
+                ),
+              );
+            } else if (userType == 'requester') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ServiceSelectionScreen()),
+              );
+            }
+          },
+
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(24.0),

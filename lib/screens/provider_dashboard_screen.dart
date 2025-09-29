@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import '../models/request_model.dart';
 import '../data/data_service.dart';
+import '../services/auth_service.dart';
+import 'provider_profile_edit_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // Provider dashboard showing incoming emergency requests
 class ProviderDashboardScreen extends StatefulWidget {
-  const ProviderDashboardScreen({super.key});
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  ProviderDashboardScreen({super.key});
 
   @override
   State<ProviderDashboardScreen> createState() => _ProviderDashboardScreenState();
 }
 
 class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   List<EmergencyRequest> _requests = [];
   bool _isLoading = true;
   String _selectedFilter = 'all'; // all, pending, accepted, declined
@@ -42,6 +48,46 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
     }
   }
 
+  // Add after _loadRequests() method:
+
+  Future<void> _toggleAvailability() async {
+    final user = AuthService().currentUser;
+    if (user == null) return;
+
+    try {
+      final currentDoc = await _firestore.collection('users').doc(user.uid).get();
+      final currentStatus = currentDoc.data()?['isAvailable'] ?? true;
+      
+      await _firestore.collection('users').doc(user.uid).update({
+        'isAvailable': !currentStatus,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Status updated to ${!currentStatus ? "Available" : "Unavailable"}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update status: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _editProfile() async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ProviderProfileEditScreen(),
+      ),
+    ).then((_) => _loadRequests()); // Refresh after editing
+  }
+
   // Filter requests based on selected filter
   List<EmergencyRequest> get _filteredRequests {
     if (_selectedFilter == 'all') {
@@ -58,18 +104,37 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
         actions: [
+  // Add availability toggle
+          FutureBuilder<DocumentSnapshot>(
+            future: _firestore.collection('users').doc(AuthService().currentUser?.uid).get(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const SizedBox();
+              final isAvailable = snapshot.data?.data() as Map?;
+              final available = isAvailable?['isAvailable'] ?? true;
+              
+              return IconButton(
+                icon: Icon(available ? Icons.visibility : Icons.visibility_off),
+                tooltip: available ? 'Available' : 'Unavailable',
+                onPressed: _toggleAvailability,
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: _editProfile,
+            tooltip: 'Edit Profile',
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadRequests,
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () {
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                '/',
-                (route) => false,
-              );
+            onPressed: () async {
+              await AuthService().signOut();
+              if (context.mounted) {
+                Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+              }
             },
           ),
         ],

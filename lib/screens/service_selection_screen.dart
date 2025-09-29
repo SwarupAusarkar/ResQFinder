@@ -1,8 +1,35 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 
 // Screen where requesters choose the type of emergency service they need
 class ServiceSelectionScreen extends StatelessWidget {
   const ServiceSelectionScreen({super.key});
+
+  Future<void> _signOut(BuildContext context) async {
+    try {
+      print("👋 Signing out from ServiceSelectionScreen...");
+      await AuthService().signOut();
+      
+      if (context.mounted) {
+        print("→ Navigating to home screen");
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/',
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      print("❌ Sign out error: $e");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sign out failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,16 +38,12 @@ class ServiceSelectionScreen extends StatelessWidget {
         title: const Text('Select Emergency Service'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () {
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                '/',
-                (route) => false,
-              );
-            },
+            tooltip: 'Sign Out',
+            onPressed: () => _signOut(context),
           ),
         ],
       ),

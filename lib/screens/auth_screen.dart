@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // Authentication screen for both user types
 class AuthScreen extends StatefulWidget {
@@ -38,21 +39,69 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       if (_isLoginMode) {
         // Log in user
-        await _authService.signIn(
+        print("🔑 Attempting sign in...");
+        final user = await _authService.signIn(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
+        
+        if (user != null) {
+          print("✓ Sign in successful, fetching user data...");
+          
+          // Get user data to determine routing
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+          
+          if (userDoc.exists && mounted) {
+            final userData = userDoc.data()!;
+            final actualUserType = userData['userType'] as String?;
+            
+            print("✓ User type: $actualUserType");
+            
+            // Navigate based on user type
+            if (actualUserType == 'provider') {
+              final profileComplete = userData['profileComplete'] as bool? ?? false;
+              
+              if (!profileComplete) {
+                print("→ Navigating to ManageServicesScreen");
+                Navigator.pushReplacementNamed(context, '/manage-services');
+              } else {
+                print("→ Navigating to ProviderDashboardScreen");
+                Navigator.pushReplacementNamed(context, '/provider-dashboard');
+              }
+            } else {
+              print("→ Navigating to ServiceSelectionScreen");
+              Navigator.pushReplacementNamed(context, '/service-selection');
+            }
+          }
+        }
       } else {
         // Register new user
-        await _authService.signUp(
+        print("📝 Attempting sign up...");
+        final user = await _authService.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
           fullName: _nameController.text.trim(),
-          userType: userType, // Pass the user role here
+          userType: userType,
         );
+        
+        if (user != null && mounted) {
+          print("✓ Sign up successful");
+          
+          // Navigate based on user type
+          if (userType == 'provider') {
+            print("→ Navigating to ManageServicesScreen");
+            Navigator.pushReplacementNamed(context, '/manage-services');
+          } else {
+            print("→ Navigating to ServiceSelectionScreen");
+            Navigator.pushReplacementNamed(context, '/service-selection');
+          }
+        }
       }
-      // On success, the AuthWrapper will handle navigation
     } catch (e) {
+      print("❌ Auth error: $e");
       // Show error message if login/signup fails
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

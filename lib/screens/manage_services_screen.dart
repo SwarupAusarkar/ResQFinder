@@ -22,45 +22,51 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
     'Traffic Control', 'Public Safety'
   ];
 
-  List<String> _selectedServices = [];
+  final List<String> _selectedServices = [];
   bool _isLoading = false;
 
-  Future<void> _saveServices() async {
-    if (_isLoading) return;
-    setState(() => _isLoading = true);
-
-    final user = _authService.currentUser;
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You are not logged in!')),
-      );
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    try {
-      await _firestore.collection('users').doc(user.uid).update({
-        'services': _selectedServices,
-        'profileComplete': true, // Mark profile as complete
-      });
-
-      if (mounted) {
-        // Navigate to the dashboard after setup is complete.
-        // The AuthWrapper will now let them through.
-        Navigator.of(context).pushReplacementNamed('/provider-dashboard');
-      }
-    } catch (e) {
-      if (mounted) {
+      Future<void> _saveServices() async {
+      if (_isLoading) return;
+      
+      if (_selectedServices.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save services: $e')),
+          const SnackBar(content: Text('Please select at least one service!')),
         );
+        return;
       }
-    } finally {
-      if (mounted) {
+      
+      setState(() => _isLoading = true);
+
+      final user = _authService.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You are not logged in!')),
+        );
         setState(() => _isLoading = false);
+        return;
+      }
+
+      try {
+        await _firestore.collection('users').doc(user.uid).update({
+          'services': _selectedServices,
+          'profileComplete': true,
+        });
+
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/provider-dashboard');
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to save services: $e')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
-  }
 
   @override
   Widget build(BuildContext context) {
