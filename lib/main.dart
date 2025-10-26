@@ -8,6 +8,7 @@ import 'screens/provider_list_screen.dart';
 import 'screens/provider_details_screen.dart';
 import 'screens/map_screen.dart';
 import 'screens/provider_dashboard_screen.dart';
+import 'screens/manage_inventory_screen.dart';
 import 'screens/manage_services_screen.dart';
 import 'widgets/auth_wrapper.dart';
 import 'package:geolocator/geolocator.dart';
@@ -136,6 +137,7 @@ class EmergencyResourceLocatorApp extends StatelessWidget {
         '/map': (context) => const MapScreen(),
         '/provider-dashboard': (context) => ProviderDashboardScreen(),
         '/manage-services': (context) => const ManageServicesScreen(),
+        '/manage-inventory': (context) => const ManageInventoryScreen(),
       },
     );
   }

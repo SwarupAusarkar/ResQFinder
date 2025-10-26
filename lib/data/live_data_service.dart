@@ -1,52 +1,44 @@
+// lib/data/live_data_service.dart
+
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/provider_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/inventory_item_model.dart'; // Import the new model
 
 class LiveDataService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const String _overpassUrl = "https://overpass-api.de/api/interpreter";
 
-/// Search providers by service with location data
-static Future<List<Provider>> searchProvidersByService({
-  required String service,
-  required double latitude,
-  required double longitude,
-}) async {
-  try {
-    final query = _firestore
-        .collection('users')
-        .where('role', isEqualTo: 'provider')
-        .where('profileComplete', isEqualTo: true)
-        .where('services', arrayContains: service);
+  /// Search providers by service with location data
+  static Future<List<Provider>> searchProvidersByService({
+    required String service,
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      final query = _firestore
+          .collection('users')
+          // ** START: MODIFICATION **
+          .where('userType', isEqualTo: 'provider') // Corrected from 'role'
+          // ** END: MODIFICATION **
+          .where('profileComplete', isEqualTo: true)
+          .where('inventory.name', arrayContains: service);
 
-    final querySnapshot = await query.get();
-    
-    return querySnapshot.docs.map((doc) {
-      final data = doc.data();
-      return Provider(
-        id: doc.id,
-        name: data['name'] ?? '',
-        type: data['type'] ?? 'hospital',
-        phone: data['phone'] ?? '',
-        address: data['address'] ?? '',
-        latitude: data['latitude']?.toDouble() ?? 0.0,
-        longitude: data['longitude']?.toDouble() ?? 0.0,
-        distance: 0.0, // Will be calculated in the screen
-        isAvailable: data['isAvailable'] ?? true,
-        rating: data['rating'] ?? 5,
-        description: data['description'] ?? '',
-        services: List<String>.from(data['services'] ?? []),
-      );
-    }).toList();
-  } catch (e) {
-    print('Error searching providers by service: $e');
-    throw Exception('Failed to search providers by service');
+      final querySnapshot = await query.get();
+      
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        return Provider.fromJson(data);
+      }).toList();
+    } catch (e) {
+      print('Error searching providers by service: $e');
+      throw Exception('Failed to search providers by service');
+    }
   }
-}
 
-    /// Fetch providers (hospital, police, ambulance) near given coordinates
-    /// Fetch providers from BOTH Firestore AND OpenStreetMap
+  /// Fetch providers (hospital, police, ambulance) near given coordinates
+  /// Fetch providers from BOTH Firestore AND OpenStreetMap
   static Future<List<Provider>> fetchProviders({
     required String serviceType,
     double latitude = 19.0760,
@@ -66,20 +58,7 @@ static Future<List<Provider>> searchProvidersByService({
 
       allProviders.addAll(firestoreProviders.docs.map((doc) {
         final data = doc.data();
-        return Provider(
-          id: doc.id,
-          name: data['fullName'] ?? '',
-          type: data['type'] ?? serviceType,
-          phone: data['phone'] ?? '',
-          address: data['address'] ?? '',
-          latitude: data['latitude']?.toDouble() ?? 0.0,
-          longitude: data['longitude']?.toDouble() ?? 0.0,
-          distance: 0.0,
-          isAvailable: data['isAvailable'] ?? true,
-          rating: data['rating'] ?? 5,
-          description: data['description'] ?? '',
-          services: List<String>.from(data['services'] ?? []),
-        );
+        return Provider.fromJson(data);
       }));
     } catch (e) {
       print('Error fetching Firestore providers: $e');
@@ -130,7 +109,7 @@ static Future<List<Provider>> searchProvidersByService({
             isAvailable: true,
             rating: 4,
             description: "Live $serviceType from OpenStreetMap",
-            services: [],
+            inventory: [], // OSM data won't have inventory
           );
         }));
       }

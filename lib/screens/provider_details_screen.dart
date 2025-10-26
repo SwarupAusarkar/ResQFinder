@@ -1,3 +1,5 @@
+// lib/screens/provider_details_screen.dart
+
 import 'package:flutter/material.dart';
 import '../models/provider_model.dart';
 import '../services/navigation_service.dart';
@@ -230,7 +232,8 @@ class ProviderDetailsScreen extends StatelessWidget {
               const SizedBox(height: 16),
             ],
 
-            // Services Card (mock data)
+            // ** START: MODIFICATION **
+            // Real-time Inventory Card
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(
@@ -244,12 +247,12 @@ class ProviderDetailsScreen extends StatelessWidget {
                     Row(
                       children: [
                         Icon(
-                          Icons.medical_services,
+                          Icons.inventory_2,
                           color: _getServiceColor(provider.type),
                         ),
                         const SizedBox(width: 8),
                         const Text(
-                          'Services Available',
+                          'Live Inventory',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -258,29 +261,29 @@ class ProviderDetailsScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    ...(_getServices(provider.type).map((service) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.check_circle,
-                              color: Colors.green,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              service,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList()),
+                    if (provider.inventory.isEmpty)
+                      const Text('No inventory data available.', style: TextStyle(color: Colors.grey))
+                    else
+                      ...provider.inventory.map((item) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(item.name, style: const TextStyle(fontSize: 15)),
+                              Text(
+                                '${item.quantity} ${item.unit}',
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
                   ],
                 ),
               ),
             ),
+            // ** END: MODIFICATION **
             const SizedBox(height: 80), // Space for floating action buttons
           ],
         ),
@@ -416,42 +419,6 @@ class ProviderDetailsScreen extends StatelessWidget {
         return Colors.orange;
       default:
         return Colors.blue;
-    }
-  }
-
-  // Get services based on provider type
-  List<String> _getServices(String type) {
-    switch (type.toLowerCase()) {
-      case 'hospital':
-        return [
-          'Emergency Room',
-          'Trauma Care',
-          'Surgery',
-          'Intensive Care Unit',
-          'Laboratory Services',
-          'Radiology & Imaging',
-          'Pharmacy',
-        ];
-      case 'police':
-        return [
-          '24/7 Emergency Response',
-          'Crime Investigation',
-          'Traffic Control',
-          'Public Safety',
-          'Emergency Dispatch',
-          'Community Policing',
-        ];
-      case 'ambulance':
-        return [
-          'Emergency Medical Transport',
-          'Advanced Life Support',
-          'Basic Life Support',
-          'Paramedic Services',
-          'Critical Care Transport',
-          '24/7 Availability',
-        ];
-      default:
-        return ['Emergency Services'];
     }
   }
 

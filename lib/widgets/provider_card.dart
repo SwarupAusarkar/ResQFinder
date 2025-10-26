@@ -1,3 +1,5 @@
+// lib/widgets/provider_card.dart
+
 import 'package:flutter/material.dart';
 import '../models/provider_model.dart';
 
@@ -104,11 +106,13 @@ class ProviderCard extends StatelessWidget {
                 ],
               ),
               
+              // ** START: MODIFICATION **
               // NEW: Services offered (with search highlighting)
-              if (provider.services.isNotEmpty) ...[
+              if (provider.inventory.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 _buildServicesSection(),
               ],
+              // ** END: MODIFICATION **
               
               const SizedBox(height: 12),
               
@@ -167,10 +171,11 @@ class ProviderCard extends StatelessWidget {
     );
   }
 
+  // ** START: MODIFICATION **
   // NEW: Build services section with search highlighting
   Widget _buildServicesSection() {
-    final displayServices = provider.services.take(3).toList();
-    final hasMore = provider.services.length > 3;
+    final displayItems = provider.inventory.take(3).toList();
+    final hasMore = provider.inventory.length > 3;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -188,7 +193,7 @@ class ProviderCard extends StatelessWidget {
           spacing: 6,
           runSpacing: 4,
           children: [
-            ...displayServices.map((service) => _buildServiceChip(service)),
+            ...displayItems.map((item) => _buildServiceChip(item.name)),
             if (hasMore)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -197,7 +202,7 @@ class ProviderCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  '+${provider.services.length - 3} more',
+                  '+${provider.inventory.length - 3} more',
                   style: const TextStyle(
                     fontSize: 10,
                     color: Colors.grey,
@@ -210,6 +215,7 @@ class ProviderCard extends StatelessWidget {
       ],
     );
   }
+  // ** END: MODIFICATION **
 
   // NEW: Build individual service chip with highlighting
   Widget _buildServiceChip(String service) {

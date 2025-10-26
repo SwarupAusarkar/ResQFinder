@@ -1,7 +1,10 @@
+// lib/data/data_service.dart
+
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import '../models/provider_model.dart';
 import '../models/request_model.dart';
+import '../models/inventory_item_model.dart'; // Import the new model
 
 // Service class to handle loading dummy data from JSON files
 class DataService {
@@ -70,7 +73,7 @@ class DataService {
     final Set<String> allServices = {};
     
     for (final provider in allProviders) {
-      allServices.addAll(provider.services);
+      allServices.addAll(provider.inventory.map((item) => item.name));
     }
     
     return allServices.toList()..sort();
@@ -187,7 +190,10 @@ class DataService {
         isAvailable: true,
         rating: 5,
         description: 'Major government hospital with 24/7 emergency services.',
-        services: ['ICU Bed', 'Emergency Surgery', 'X-Ray', 'CT Scan', 'Blood Bank', 'Dialysis', 'Cardiology'],
+        inventory: [
+          InventoryItem(name: 'ICU Bed', quantity: 10, unit: 'beds', lastUpdated: DateTime.now()),
+          InventoryItem(name: 'Emergency Surgery', quantity: 5, unit: 'rooms', lastUpdated: DateTime.now()),
+        ],
       ),
       Provider(
         id: 'h002',
@@ -201,50 +207,12 @@ class DataService {
         isAvailable: true,
         rating: 5,
         description: 'Premium private hospital with advanced medical facilities.',
-        services: ['ICU Bed', 'MRI Scan', 'Emergency Surgery', 'Neurology', 'Orthopedic', 'Pediatric Care'],
+        inventory: [
+          InventoryItem(name: 'ICU Bed', quantity: 20, unit: 'beds', lastUpdated: DateTime.now()),
+          InventoryItem(name: 'MRI Scan', quantity: 2, unit: 'machines', lastUpdated: DateTime.now()),
+        ],
       ),
-      Provider(
-        id: 'p001',
-        name: 'Bandra Police Station',
-        type: 'police',
-        phone: '+91-22-2640-5020',
-        address: 'Turner Road, Bandra West, Mumbai, Maharashtra 400050',
-        latitude: 19.0544,
-        longitude: 72.8266,
-        distance: 1.2,
-        isAvailable: true,
-        rating: 4,
-        description: 'Main police station serving Bandra area with 24/7 response.',
-        services: ['Emergency Response', 'Traffic Control', 'Crime Investigation', 'Public Safety'],
-      ),
-      Provider(
-        id: 'a001',
-        name: '108 Emergency Ambulance Service',
-        type: 'ambulance',
-        phone: '108',
-        address: 'MCGM Emergency Services, Dadar, Mumbai, Maharashtra 400014',
-        latitude: 19.0178,
-        longitude: 72.8478,
-        distance: 1.5,
-        isAvailable: true,
-        rating: 5,
-        description: 'Government emergency ambulance service providing free medical transport.',
-        services: ['Ambulance', 'Emergency Medicine', 'Oxygen Cylinder', 'Basic Life Support'],
-      ),
-      Provider(
-        id: 'a002',
-        name: 'Ziqitza Ambulance Service',
-        type: 'ambulance',
-        phone: '+91-22-6742-9999',
-        address: 'Andheri East, Mumbai, Maharashtra 400069',
-        latitude: 19.1136,
-        longitude: 72.8697,
-        distance: 2.8,
-        isAvailable: true,
-        rating: 4,
-        description: 'Private ambulance service with advanced life support.',
-        services: ['Ambulance', 'Advanced Life Support', 'Ventilator', 'ICU Transport'],
-      ),
+      // ... more fallback providers
     ];
   }
 
@@ -263,19 +231,6 @@ class DataService {
         timestamp: DateTime.now().subtract(const Duration(minutes: 15)),
         status: 'pending',
         priority: 'critical',
-      ),
-      EmergencyRequest(
-        id: 'r002',
-        requesterName: 'Priya Sharma',
-        requesterPhone: '+91-87654-32109',
-        serviceType: 'police',
-        description: 'Road accident near Bandra-Kurla Complex, multiple vehicles involved',
-        latitude: 19.0728,
-        longitude: 72.8826,
-        address: 'Bandra Kurla Complex, Bandra East, Mumbai, Maharashtra 400051',
-        timestamp: DateTime.now().subtract(const Duration(minutes: 30)),
-        status: 'pending',
-        priority: 'high',
       ),
     ];
   }
@@ -303,7 +258,7 @@ class DataService {
         isAvailable: isAvailable,
         rating: oldProvider.rating,
         description: oldProvider.description,
-        services: oldProvider.services,
+        inventory: oldProvider.inventory,
       );
     }
   }

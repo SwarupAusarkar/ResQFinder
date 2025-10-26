@@ -1,9 +1,12 @@
+// lib/screens/provider_dashboard_screen.dart
+
 import 'package:flutter/material.dart';
 import '../models/request_model.dart';
 import '../data/data_service.dart';
 import '../services/auth_service.dart';
 import 'provider_profile_edit_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'manage_inventory_screen.dart'; // Import the new screen
 
 // Provider dashboard showing incoming emergency requests
 class ProviderDashboardScreen extends StatefulWidget {
@@ -104,7 +107,7 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
         actions: [
-  // Add availability toggle
+          // Add availability toggle
           FutureBuilder<DocumentSnapshot>(
             future: _firestore.collection('users').doc(AuthService().currentUser?.uid).get(),
             builder: (context, snapshot) {
@@ -119,6 +122,15 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
               );
             },
           ),
+          // ** START: MODIFICATION **
+          IconButton(
+            icon: const Icon(Icons.inventory),
+            onPressed: () {
+              Navigator.pushNamed(context, '/manage-inventory');
+            },
+            tooltip: 'Manage Inventory',
+          ),
+          // ** END: MODIFICATION **
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: _editProfile,

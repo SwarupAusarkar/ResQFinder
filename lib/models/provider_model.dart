@@ -1,3 +1,7 @@
+// lib/models/provider_model.dart
+
+import 'inventory_item_model.dart'; // Import the new model
+
 // Updated Model class for service providers with services array
 class Provider {
   final String id;
@@ -11,7 +15,7 @@ class Provider {
   final bool isAvailable;
   final int rating; // Rating out of 5
   final String description;
-  final List<String> services; // NEW: Array of services this provider offers
+  final List<InventoryItem> inventory; // ** MODIFIED: from List<String> to List<InventoryItem> **
 
   Provider({
     required this.id,
@@ -25,7 +29,7 @@ class Provider {
     required this.isAvailable,
     required this.rating,
     required this.description,
-    this.services = const [], // Default to empty list
+    this.inventory = const [], // Default to empty list
   });
 
   // Create Provider object from JSON data
@@ -42,9 +46,10 @@ class Provider {
       isAvailable: json['isAvailable'] ?? true,
       rating: json['rating'] ?? 5,
       description: json['description'] ?? '',
-      services: json['services'] != null 
-          ? List<String>.from(json['services'])
-          : [],
+      // ** MODIFIED: Parse the inventory list **
+      inventory: (json['inventory'] as List<dynamic>? ?? [])
+          .map((item) => InventoryItem.fromMap(item as Map<String, dynamic>))
+          .toList(),
     );
   }
   
@@ -52,7 +57,7 @@ class Provider {
   Provider copyWith({
     double? distance,
     bool? isAvailable,
-    List<String>? services,
+    List<InventoryItem>? inventory,
   }) {
     return Provider(
       id: this.id,
@@ -66,7 +71,7 @@ class Provider {
       isAvailable: isAvailable ?? this.isAvailable,
       rating: this.rating,
       description: this.description,
-      services: services ?? this.services,
+      inventory: inventory ?? this.inventory,
     );
   }
 
@@ -84,20 +89,21 @@ class Provider {
       'isAvailable': isAvailable,
       'rating': rating,
       'description': description,
-      'services': services,
+      'inventory': inventory.map((item) => item.toMap()).toList(), // ** MODIFIED **
     };
   }
 
   // Check if provider offers a specific service
   bool offersService(String service) {
-    return services.any((s) => s.toLowerCase().contains(service.toLowerCase()));
+    return inventory.any((item) => item.name.toLowerCase().contains(service.toLowerCase()));
   }
 
   // Get services as a formatted string
   String get servicesDisplay {
-    if (services.isEmpty) return 'No services listed';
-    if (services.length <= 3) return services.join(', ');
-    return '${services.take(3).join(', ')} +${services.length - 3} more';
+    if (inventory.isEmpty) return 'No services listed';
+    final itemNames = inventory.map((item) => item.name).toList();
+    if (itemNames.length <= 3) return itemNames.join(', ');
+    return '${itemNames.take(3).join(', ')} +${itemNames.length - 3} more';
   }
 
   // Get icon based on provider type
@@ -116,7 +122,7 @@ class Provider {
 
   // Get primary service category for display
   String get primaryService {
-    if (services.isEmpty) return type;
-    return services.first;
+    if (inventory.isEmpty) return type;
+    return inventory.first.name;
   }
 }
