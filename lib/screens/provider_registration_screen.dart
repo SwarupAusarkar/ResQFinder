@@ -1,3 +1,5 @@
+// lib/screens/provider_registration_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -84,6 +86,7 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
     }
   }
 
+  // ** START: MODIFICATION **
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -100,31 +103,23 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
     setState(() => _isLoading = true);
 
     try {
-      // Create Firebase auth account
+      // Call the updated signUp method with all provider data
       final user = await AuthService().signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
         fullName: _nameController.text.trim(),
         userType: 'provider',
+        phone: _phoneController.text.trim(),
+        address: _addressController.text.trim(),
+        latitude: double.parse(_latController.text),
+        longitude: double.parse(_lonController.text),
+        providerType: _selectedType,
+        description: _descriptionController.text.trim(),
       );
 
-      if (user != null) {
-        // Update user document with all provider details
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-          'phone': _phoneController.text.trim(),
-          'address': _addressController.text.trim(),
-          'latitude': double.parse(_latController.text),
-          'longitude': double.parse(_lonController.text),
-          'type': _selectedType,
-          'description': _descriptionController.text.trim(),
-          'isAvailable': true,
-          'rating': 5,
-          'profileComplete': false, // Will be true after service selection
-        });
-
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/manage-services');
-        }
+      if (user != null && mounted) {
+        // Since profile is now complete on creation, navigate to the inventory screen
+        Navigator.pushReplacementNamed(context, '/manage-inventory');
       }
     } catch (e) {
       if (mounted) {
@@ -138,6 +133,7 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
       }
     }
   }
+  // ** END: MODIFICATION **
 
   @override
   Widget build(BuildContext context) {

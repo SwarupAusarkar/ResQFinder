@@ -1,3 +1,5 @@
+// lib/services/auth_service.dart
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -9,12 +11,21 @@ class AuthService {
 
   User? get currentUser => _auth.currentUser;
 
+  // ** START: MODIFICATION **
   Future<User?> signUp({
     required String email,
     required String password,
     required String fullName,
     required String userType,
+    // Add provider-specific fields
+    String? phone,
+    String? address,
+    double? latitude,
+    double? longitude,
+    String? providerType,
+    String? description,
   }) async {
+  // ** END: MODIFICATION **
     try {
       print("📝 Starting sign up for: $email");
       
@@ -28,20 +39,35 @@ class AuthService {
       if (user != null) {
         print("✓ User created: ${user.uid}");
         
+        // ** START: MODIFICATION **
+        // Consolidate all user data into a single map
         final userData = {
           'fullName': fullName,
           'email': email,
           'userType': userType,
           'createdAt': FieldValue.serverTimestamp(),
-          if (userType == 'provider') ...{
-            'services': [],
-            'profileComplete': false,
-          }
         };
+
+        if (userType == 'provider') {
+          userData.addAll({
+            'phone': phone ?? '',
+            'address': address ?? '',
+            'latitude': latitude ?? 0.0,
+            'longitude': longitude ?? 0.0,
+            'type': providerType ?? 'hospital',
+            'description': description ?? '',
+            'isAvailable': true,
+            'rating': 5, // Default rating
+            'profileComplete': true, // Set to true immediately
+            'inventory': [], // Initialize with empty inventory
+          });
+        }
         
-        print("📄 Creating user document: $userData");
+        print("📄 Creating user document with all data: $userData");
         
+        // Use a single `set` operation to create the complete document
         await _firestore.collection('users').doc(user.uid).set(userData);
+        // ** END: MODIFICATION **
         
         print("✓ User document created successfully");
       }

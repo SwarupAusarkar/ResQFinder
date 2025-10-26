@@ -2,7 +2,6 @@
 
 import 'inventory_item_model.dart'; // Import the new model
 
-// Updated Model class for service providers with services array
 class Provider {
   final String id;
   final String name;
@@ -15,7 +14,7 @@ class Provider {
   final bool isAvailable;
   final int rating; // Rating out of 5
   final String description;
-  final List<InventoryItem> inventory; // ** MODIFIED: from List<String> to List<InventoryItem> **
+  final List<InventoryItem> inventory;
 
   Provider({
     required this.id,
@@ -29,14 +28,16 @@ class Provider {
     required this.isAvailable,
     required this.rating,
     required this.description,
-    this.inventory = const [], // Default to empty list
+    this.inventory = const [],
   });
 
   // Create Provider object from JSON data
   factory Provider.fromJson(Map<String, dynamic> json) {
     return Provider(
       id: json['id'] ?? '',
-      name: json['name'] ?? '',
+      // ** START: MODIFICATION **
+      name: json['fullName'] ?? '', // Corrected from 'name' to 'fullName'
+      // ** END: MODIFICATION **
       type: json['type'] ?? '',
       phone: json['phone'] ?? '',
       address: json['address'] ?? '',
@@ -46,14 +47,12 @@ class Provider {
       isAvailable: json['isAvailable'] ?? true,
       rating: json['rating'] ?? 5,
       description: json['description'] ?? '',
-      // ** MODIFIED: Parse the inventory list **
       inventory: (json['inventory'] as List<dynamic>? ?? [])
           .map((item) => InventoryItem.fromMap(item as Map<String, dynamic>))
           .toList(),
     );
   }
   
-  // Method to create a copy of the instance with updated distance
   Provider copyWith({
     double? distance,
     bool? isAvailable,
@@ -79,7 +78,9 @@ class Provider {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'name': name,
+      // ** START: MODIFICATION **
+      'fullName': name, // Corrected from 'name' to 'fullName' for consistency
+      // ** END: MODIFICATION **
       'type': type,
       'phone': phone,
       'address': address,
@@ -89,7 +90,7 @@ class Provider {
       'isAvailable': isAvailable,
       'rating': rating,
       'description': description,
-      'inventory': inventory.map((item) => item.toMap()).toList(), // ** MODIFIED **
+      'inventory': inventory.map((item) => item.toMap()).toList(),
     };
   }
 

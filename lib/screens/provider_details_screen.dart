@@ -1,5 +1,6 @@
 // lib/screens/provider_details_screen.dart
 
+import 'package:emergency_res_loc_new/screens/send_request_screen.dart';
 import 'package:flutter/material.dart';
 import '../models/provider_model.dart';
 import '../services/navigation_service.dart';
@@ -32,7 +33,9 @@ class ProviderDetailsScreen extends StatelessWidget {
         foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        // ** START: MODIFICATION **
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 160), // Increased bottom padding
+        // ** END: MODIFICATION **
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -232,7 +235,6 @@ class ProviderDetailsScreen extends StatelessWidget {
               const SizedBox(height: 16),
             ],
 
-            // ** START: MODIFICATION **
             // Real-time Inventory Card
             Card(
               elevation: 4,
@@ -265,17 +267,29 @@ class ProviderDetailsScreen extends StatelessWidget {
                       const Text('No inventory data available.', style: TextStyle(color: Colors.grey))
                     else
                       ...provider.inventory.map((item) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(item.name, style: const TextStyle(fontSize: 15)),
-                              Text(
-                                '${item.quantity} ${item.unit}',
-                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        return InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => SendRequestScreen(
+                                  provider: provider,
+                                  inventoryItem: item,
+                                ),
                               ),
-                            ],
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(child: Text(item.name, style: const TextStyle(fontSize: 15))),
+                                Text('${item.quantity} ${item.unit}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 16),
+                                const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                              ],
+                            ),
                           ),
                         );
                       }).toList(),
@@ -283,8 +297,6 @@ class ProviderDetailsScreen extends StatelessWidget {
                 ),
               ),
             ),
-            // ** END: MODIFICATION **
-            const SizedBox(height: 80), // Space for floating action buttons
           ],
         ),
       ),

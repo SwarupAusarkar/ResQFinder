@@ -1,3 +1,5 @@
+import 'package:emergency_res_loc_new/models/inventory_item_model.dart';
+import 'package:emergency_res_loc_new/models/provider_model.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -12,6 +14,7 @@ import 'screens/manage_inventory_screen.dart';
 import 'screens/manage_services_screen.dart';
 import 'widgets/auth_wrapper.dart';
 import 'package:geolocator/geolocator.dart';
+import 'screens/send_request_screen.dart';
 
 void main() async {
   try {
@@ -138,6 +141,11 @@ class EmergencyResourceLocatorApp extends StatelessWidget {
         '/provider-dashboard': (context) => ProviderDashboardScreen(),
         '/manage-services': (context) => const ManageServicesScreen(),
         '/manage-inventory': (context) => const ManageInventoryScreen(),
+        '/send-request': (context) => SendRequestScreen(
+          provider: Provider(id: '', name: '', type: '', phone: '', address: '', latitude: 0, longitude: 0, distance: 0, isAvailable: false, rating: 0, description: ''), // Placeholder
+          inventoryItem: InventoryItem(name: '', quantity: 0, unit: '', lastUpdated: DateTime.now()), // Placeholder
+        ),
+        
       },
     );
   }

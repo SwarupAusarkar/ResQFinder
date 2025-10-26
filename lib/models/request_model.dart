@@ -1,94 +1,117 @@
+// lib/models/request_model.dart
+
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // Model class for emergency requests
 class EmergencyRequest {
-  final String id;
+  final String id; // This will be the document ID from Firestore
+  final String masterRequestId;
+  final String requesterId;
   final String requesterName;
-  final String requesterPhone;
-  final String serviceType; // 'hospital', 'police', 'ambulance'
+  final String providerId;
+  final String providerName;
+  final Map<String, dynamic> requestedItem;
   final String description;
+  final DateTime timestamp;
+  final String status;
+  final String requesterPhone;
+  final String serviceType;
+  final String priority;
   final double latitude;
   final double longitude;
   final String address;
-  final DateTime timestamp;
-  final String status; // 'pending', 'accepted', 'declined', 'completed'
-  final String priority; // 'low', 'medium', 'high', 'critical'
 
   EmergencyRequest({
     required this.id,
+    required this.masterRequestId,
+    required this.requesterId,
     required this.requesterName,
+    required this.providerId,
+    required this.providerName,
+    required this.requestedItem,
+    required this.description,
+    required this.timestamp,
+    required this.status,
     required this.requesterPhone,
     required this.serviceType,
-    required this.description,
+    required this.priority,
     required this.latitude,
     required this.longitude,
     required this.address,
-    required this.timestamp,
-    required this.status,
-    required this.priority,
   });
 
-  // Create EmergencyRequest object from JSON data
-  factory EmergencyRequest.fromJson(Map<String, dynamic> json) {
+  // Create EmergencyRequest object from a Firestore document
+  factory EmergencyRequest.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return EmergencyRequest(
-      id: json['id'] ?? '',
-      requesterName: json['requesterName'] ?? '',
-      requesterPhone: json['requesterPhone'] ?? '',
-      serviceType: json['serviceType'] ?? '',
-      description: json['description'] ?? '',
-      latitude: json['latitude']?.toDouble() ?? 0.0,
-      longitude: json['longitude']?.toDouble() ?? 0.0,
-      address: json['address'] ?? '',
-      timestamp: DateTime.parse(json['timestamp'] ?? DateTime.now().toIso8601String()),
-      status: json['status'] ?? 'pending',
-      priority: json['priority'] ?? 'medium',
+      id: doc.id, // Use the document ID
+      masterRequestId: data['masterRequestId'] ?? '',
+      requesterId: data['requesterId'] ?? '',
+      requesterName: data['requesterName'] ?? 'Unknown Requester',
+      providerId: data['providerId'] ?? '',
+      providerName: data['providerName'] ?? '',
+      requestedItem: data['requestedItem'] as Map<String, dynamic>? ?? {},
+      description: data['description'] ?? '',
+      // Correctly handle Firestore Timestamp
+      timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      status: data['status'] ?? 'pending',
+      requesterPhone: data['requesterPhone'] ?? '',
+      serviceType: data['serviceType'] ?? '',
+      priority: data['priority'] ?? 'normal',
+      latitude: (data['location'] as GeoPoint?)?.latitude ?? 0.0,
+      longitude: (data['location'] as GeoPoint?)?.longitude ?? 0.0,
+      address: data['address'] ?? '',
     );
   }
 
-  // Convert EmergencyRequest object to JSON
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'requesterName': requesterName,
-      'requesterPhone': requesterPhone,
-      'serviceType': serviceType,
-      'description': description,
-      'latitude': latitude,
-      'longitude': longitude,
-      'address': address,
-      'timestamp': timestamp.toIso8601String(),
-      'status': status,
-      'priority': priority,
-    };
-  }
+  // Helper getters for easier access in the UI
+  String get itemName => requestedItem['name'] ?? 'Unknown Item';
+  int get itemQuantity => requestedItem['quantity'] ?? 0;
+  String get itemUnit => requestedItem['unit'] ?? '';
 
-  // Get priority color based on priority level
-  Color get priorityColor {
-    switch (priority.toLowerCase()) {
-      case 'critical':
-        return const Color(0xFFD32F2F); // Red
-      case 'high':
-        return const Color(0xFFFF5722); // Deep Orange
-      case 'medium':
-        return const Color(0xFFFF9800); // Orange
-      case 'low':
-        return const Color(0xFF4CAF50); // Green
+  // Get status color based on status string
+  Color get statusColor {
+    switch (status.toLowerCase()) {
+      case 'accepted':
+        return Colors.green;
+      case 'declined':
+      case 'cancelled_by_system':
+        return Colors.red;
+      case 'pending':
+        return Colors.orange;
       default:
-        return const Color(0xFF757575); // Gray
+        return Colors.grey;
     }
   }
 
-  // Get service type icon
+  // Get priority color
+  Color get priorityColor {
+    switch (priority.toLowerCase()) {
+      case 'high':
+        return Colors.red;
+      case 'medium':
+        return Colors.orange;
+      case 'low':
+        return Colors.yellow;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  // Get service icon (emoji)
   String get serviceIcon {
     switch (serviceType.toLowerCase()) {
-      case 'hospital':
+      case 'medical':
         return '🏥';
+      case 'fire':
+        return '🚒';
       case 'police':
-        return '🚓';
+        return '👮';
       case 'ambulance':
         return '🚑';
       default:
-        return '📞';
+        return '🆘';
     }
   }
 }
