@@ -32,20 +32,18 @@ class Provider {
   });
 
   // Create Provider object from JSON data
-  factory Provider.fromJson(Map<String, dynamic> json) {
+  factory Provider.fromJson(String id, Map<String, dynamic> json) {
     return Provider(
-      id: json['id'] ?? '',
-      // ** START: MODIFICATION **
-      name: json['fullName'] ?? '', // Corrected from 'name' to 'fullName'
-      // ** END: MODIFICATION **
+      id: id, // Use the passed-in document ID
+      name: json['fullName'] ?? '',
       type: json['type'] ?? '',
       phone: json['phone'] ?? '',
       address: json['address'] ?? '',
-      latitude: json['latitude']?.toDouble() ?? 0.0,
-      longitude: json['longitude']?.toDouble() ?? 0.0,
-      distance: json['distance']?.toDouble() ?? 0.0,
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
+      distance: (json['distance'] as num?)?.toDouble() ?? 0.0,
       isAvailable: json['isAvailable'] ?? true,
-      rating: json['rating'] ?? 5,
+      rating: (json['rating'] as num?)?.toInt() ?? 0,
       description: json['description'] ?? '',
       inventory: (json['inventory'] as List<dynamic>? ?? [])
           .map((item) => InventoryItem.fromMap(item as Map<String, dynamic>))

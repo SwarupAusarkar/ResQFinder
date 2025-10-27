@@ -64,7 +64,26 @@ class EmergencyRequest {
       address: data['address'] ?? '',
     );
   }
-
+  factory EmergencyRequest.fromJson(Map<String, dynamic> json) {
+    return EmergencyRequest(
+      id: json['id'] ?? '',
+      masterRequestId: json['masterRequestId'] ?? '',
+      requesterId: json['requesterId'] ?? '',
+      requesterName: json['requesterName'] ?? '',
+      providerId: json['providerId'] ?? '',
+      providerName: json['providerName'] ?? '',
+      requestedItem: json['requestedItem'] as Map<String, dynamic>? ?? {},
+      description: json['description'] ?? '',
+      timestamp: DateTime.parse(json['timestamp'] ?? DateTime.now().toIso8601String()),
+      status: json['status'] ?? 'pending',
+      requesterPhone: json['requesterPhone'] ?? '',
+      serviceType: json['serviceType'] ?? '',
+      priority: json['priority'] ?? 'medium',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,   // Corrected from 'data' to 'json'
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0, // Corrected from 'data' to 'json'
+      address: json['address'] ?? '',
+    );
+  }
   // Helper getters for easier access in the UI
   String get itemName => requestedItem['name'] ?? 'Unknown Item';
   int get itemQuantity => requestedItem['quantity'] ?? 0;

@@ -15,15 +15,16 @@ class DataService {
   static Future<List<Provider>> loadProviders() async {
     if (_providers.isEmpty) {
       try {
-        // Load JSON file from assets (consistent filename)
         final String jsonString = await rootBundle.loadString('assets/data/providers.json');
         final Map<String, dynamic> jsonData = json.decode(jsonString);
         
-        // Parse providers list
         final List<dynamic> providersJson = jsonData['providers'];
-        _providers = providersJson.map((json) => Provider.fromJson(json)).toList();
+        _providers = providersJson.map((json) {
+          // Correctly pass the ID and the map to the factory
+          return Provider.fromJson(json['id'], json as Map<String, dynamic>);
+        }).toList();
       } catch (e) {
-        print('Error loading providers: $e');
+        print('Error loading providers from JSON, using fallback: $e');
         _providers = _getFallbackProviders();
       }
     }
@@ -34,15 +35,14 @@ class DataService {
   static Future<List<EmergencyRequest>> loadRequests() async {
     if (_requests.isEmpty) {
       try {
-        // Use same file for consistency
+        // This part will likely fail now as the JSON structure is outdated,
+        // so the code will correctly fall back to _getFallbackRequests().
         final String jsonString = await rootBundle.loadString('assets/data/providers.json');
         final Map<String, dynamic> jsonData = json.decode(jsonString);
-        
-        // Parse requests list
         final List<dynamic> requestsJson = jsonData['requests'];
         _requests = requestsJson.map((json) => EmergencyRequest.fromJson(json)).toList();
       } catch (e) {
-        print('Error loading requests: $e');
+        print('Error loading requests from JSON, using fallback: $e');
         _requests = _getFallbackRequests();
       }
     }
@@ -217,20 +217,25 @@ class DataService {
   }
 
   // Fallback requests with Mumbai data
-  static List<EmergencyRequest> _getFallbackRequests() {
+ static List<EmergencyRequest> _getFallbackRequests() {
     return [
       EmergencyRequest(
-        id: 'r001',
-        requesterName: 'Rajesh Kumar',
-        requesterPhone: '+91-98765-43210',
-        serviceType: 'ambulance',
-        description: 'Heart attack symptoms, need immediate medical attention',
-        latitude: 19.0596,
-        longitude: 72.8295,
-        address: 'Linking Road, Bandra West, Mumbai, Maharashtra 400050',
+        id: 'r001-fallback',
+        masterRequestId: 'fallback-master-001',
+        requesterId: 'fallback-user-001',
+        requesterName: 'Rajesh Kumar (Dummy)',
+        providerId: 'h001-fallback',
+        providerName: 'King Edward Hospital (Dummy)',
+        requestedItem: {'name': 'ICU Bed', 'quantity': 1, 'unit': 'beds'},
+        description: 'Heart attack symptoms, urgent.',
         timestamp: DateTime.now().subtract(const Duration(minutes: 15)),
         status: 'pending',
+        requesterPhone: '+91-98765-43210',
+        serviceType: 'hospital',
         priority: 'critical',
+        latitude: 19.0596,
+        longitude: 72.8295,
+        address: 'Linking Road, Bandra West',
       ),
     ];
   }

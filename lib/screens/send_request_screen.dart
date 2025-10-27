@@ -41,30 +41,45 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
       return;
     }
 
-    final masterRequestId = const Uuid().v4();
-    final requestedQuantity = int.tryParse(_quantityController.text) ?? 0;
-
-    final requestData = {
-      'masterRequestId': masterRequestId,
-      'requesterId': user.uid,
-      'requesterName': user.displayName ?? user.email,
-      'providerId': widget.provider.id,
-      'providerName': widget.provider.name,
-      'requestedItem': {
-        'name': widget.inventoryItem.name,
-        'quantity': requestedQuantity,
-        'unit': widget.inventoryItem.unit,
-      },
-      'description': _descriptionController.text.trim(),
-      'status': 'pending',
-      'timestamp': FieldValue.serverTimestamp(),
-    };
-
     try {
+      // ** START: MODIFICATION - Fetch requester's full data **
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final userData = userDoc.data() as Map<String, dynamic>?;
+
+      if (userData == null) {
+        throw Exception("Requester's data not found.");
+      }
+      
+      final masterRequestId = const Uuid().v4();
+      final requestedQuantity = int.tryParse(_quantityController.text) ?? 0;
+
+      final requestData = {
+        'masterRequestId': masterRequestId,
+        'requesterId': user.uid,
+        'requesterName': userData['fullName'] ?? user.email,
+        'requesterPhone': userData['phone'] ?? 'N/A', // Assuming requester has a phone field
+        'providerId': widget.provider.id,
+        'providerName': widget.provider.name,
+        'requestedItem': {
+          'name': widget.inventoryItem.name,
+          'quantity': requestedQuantity,
+          'unit': widget.inventoryItem.unit,
+        },
+        'description': _descriptionController.text.trim(),
+        'status': 'pending',
+        'timestamp': FieldValue.serverTimestamp(),
+        'serviceType': widget.provider.type,
+        'priority': 'high', // You can add logic to determine priority later
+        'latitude': userData['latitude'] ?? 0.0,
+        'longitude': userData['longitude'] ?? 0.0,
+        'address': userData['address'] ?? 'N/A',
+      };
+      // ** END: MODIFICATION **
+
       await FirebaseFirestore.instance.collection('emergency_requests').add(requestData);
 
       if (mounted) {
-        Navigator.pop(context); // Go back to the details screen
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Request sent successfully!'),
@@ -102,6 +117,7 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
             children: [
               Card(
                 elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -159,6 +175,7 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
                   backgroundColor: _getServiceColor(widget.provider.type),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
+                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: _isSending
                     ? const CircularProgressIndicator(color: Colors.white)

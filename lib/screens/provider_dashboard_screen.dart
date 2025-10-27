@@ -1,17 +1,15 @@
 // lib/screens/provider_dashboard_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/request_model.dart';
-import '../data/data_service.dart';
+import '../models/inventory_item_model.dart';
 import '../services/auth_service.dart';
 import 'provider_profile_edit_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'manage_inventory_screen.dart'; // Import the new screen
 
 // Provider dashboard showing incoming emergency requests
 class ProviderDashboardScreen extends StatefulWidget {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  ProviderDashboardScreen({super.key});
+  const ProviderDashboardScreen({super.key});
 
   @override
   State<ProviderDashboardScreen> createState() => _ProviderDashboardScreenState();
@@ -19,42 +17,97 @@ class ProviderDashboardScreen extends StatefulWidget {
 
 class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final AuthService _authService = AuthService();
+  String _selectedFilter = 'pending'; // Default to pending to show active requests
 
-  List<EmergencyRequest> _requests = [];
-  bool _isLoading = true;
-  String _selectedFilter = 'all'; // all, pending, accepted, declined
+  // ** START: MODIFICATION - NEW LIVE DATA LOGIC **
 
-  @override
-  void initState() {
-    super.initState();
-    _loadRequests();
-  }
+  // Securely accepts a request using a Firestore transaction to prevent race conditions.
+  Future<void> _acceptRequest(EmergencyRequest request) async {
+    final providerId = _authService.currentUser?.uid;
+    if (providerId == null) return;
 
-  // Load emergency requests from data service
-  Future<void> _loadRequests() async {
     try {
-      final requests = await DataService.loadRequests();
-      
+      await _firestore.runTransaction((transaction) async {
+        final relatedRequestsQuery = _firestore
+            .collection('emergency_requests')
+            .where('masterRequestId', isEqualTo: request.masterRequestId);
+            
+        final relatedRequestsSnapshot = await relatedRequestsQuery.get();
+
+        if (relatedRequestsSnapshot.docs.any((doc) => doc.data()['status'] == 'accepted')) {
+          throw Exception('This request has already been handled.');
+        }
+
+        transaction.update(_firestore.collection('emergency_requests').doc(request.id), {'status': 'accepted'});
+
+        for (final doc in relatedRequestsSnapshot.docs) {
+          if (doc.id != request.id && doc.data()['status'] == 'pending') {
+            transaction.update(doc.reference, {'status': 'cancelled_by_system'});
+          }
+        }
+        
+        final providerDocRef = _firestore.collection('users').doc(providerId);
+        final providerSnapshot = await transaction.get(providerDocRef);
+        final providerData = providerSnapshot.data() as Map<String, dynamic>?;
+        
+        if (providerData != null) {
+          final inventory = (providerData['inventory'] as List<dynamic>)
+              .map((item) => InventoryItem.fromMap(item as Map<String, dynamic>))
+              .toList();
+              
+          final itemIndex = inventory.indexWhere((item) => item.name == request.itemName);
+          if (itemIndex != -1) {
+            final currentQuantity = inventory[itemIndex].quantity;
+            if (currentQuantity >= request.itemQuantity) {
+              inventory[itemIndex] = InventoryItem(
+                name: inventory[itemIndex].name,
+                quantity: currentQuantity - request.itemQuantity,
+                unit: inventory[itemIndex].unit,
+                lastUpdated: DateTime.now(),
+              );
+
+              final newInventoryMap = inventory.map((item) => item.toMap()).toList();
+              final newInventorySearch = newInventoryMap.map((item) => item['name'] as String).toList();
+              
+              transaction.update(providerDocRef, {
+                'inventory': newInventoryMap,
+                'inventorySearch': newInventorySearch,
+              });
+            } else {
+              throw Exception('Not enough inventory to fulfill this request.');
+            }
+          }
+        }
+      });
       if (mounted) {
-        setState(() {
-          _requests = requests;
-          _isLoading = false;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request accepted!'), backgroundColor: Colors.green));
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        _showErrorSnackBar('Failed to load requests: $e');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.red));
       }
     }
   }
 
-  // Add after _loadRequests() method:
+  // Declines a request.
+  Future<void> _declineRequest(EmergencyRequest request) async {
+    try {
+      await _firestore.collection('emergency_requests').doc(request.id).update({'status': 'declined'});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request declined.'), backgroundColor: Colors.orange));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error declining request: ${e.toString()}'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  // ** END: NEW LIVE DATA LOGIC **
 
   Future<void> _toggleAvailability() async {
-    final user = AuthService().currentUser;
+    final user = _authService.currentUser;
     if (user == null) return;
 
     try {
@@ -88,62 +141,51 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
       MaterialPageRoute(
         builder: (context) => const ProviderProfileEditScreen(),
       ),
-    ).then((_) => _loadRequests()); // Refresh after editing
-  }
-
-  // Filter requests based on selected filter
-  List<EmergencyRequest> get _filteredRequests {
-    if (_selectedFilter == 'all') {
-      return _requests;
-    }
-    return _requests.where((request) => request.status == _selectedFilter).toList();
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final user = _authService.currentUser;
+    if (user == null) {
+      return const Scaffold(body: Center(child: Text("User not logged in.")));
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Provider Dashboard'),
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
         actions: [
-          // Add availability toggle
           FutureBuilder<DocumentSnapshot>(
-            future: _firestore.collection('users').doc(AuthService().currentUser?.uid).get(),
+            future: _firestore.collection('users').doc(user.uid).get(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) return const SizedBox();
-              final isAvailable = snapshot.data?.data() as Map?;
-              final available = isAvailable?['isAvailable'] ?? true;
+              // ** CORRECTED: Access data from DocumentSnapshot correctly **
+              final data = snapshot.data?.data() as Map<String, dynamic>?;
+              final isAvailable = data?['isAvailable'] ?? true;
               
               return IconButton(
-                icon: Icon(available ? Icons.visibility : Icons.visibility_off),
-                tooltip: available ? 'Available' : 'Unavailable',
+                icon: Icon(isAvailable ? Icons.visibility : Icons.visibility_off),
+                tooltip: isAvailable ? 'Set to Unavailable' : 'Set to Available',
                 onPressed: _toggleAvailability,
               );
             },
           ),
-          // ** START: MODIFICATION **
           IconButton(
             icon: const Icon(Icons.inventory),
-            onPressed: () {
-              Navigator.pushNamed(context, '/manage-inventory');
-            },
+            onPressed: () => Navigator.pushNamed(context, '/manage-inventory'),
             tooltip: 'Manage Inventory',
           ),
-          // ** END: MODIFICATION **
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: _editProfile,
             tooltip: 'Edit Profile',
           ),
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadRequests,
-          ),
-          IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              await AuthService().signOut();
+              await _authService.signOut();
               if (context.mounted) {
                 Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
               }
@@ -153,73 +195,43 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
       ),
       body: Column(
         children: [
-          // Dashboard stats
-          _buildStatsSection(),
+          // _buildStatsSection(), // Preserving this, can be re-enabled later
           
-          // Filter tabs
           _buildFilterTabs(),
           
-          // Requests list
+          // ** MODIFICATION: Replaced old logic with a live StreamBuilder **
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredRequests.isEmpty
-                    ? _buildEmptyState()
-                    : RefreshIndicator(
-                        onRefresh: _loadRequests,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _filteredRequests.length,
-                          itemBuilder: (context, index) {
-                            final request = _filteredRequests[index];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _buildRequestCard(request),
-                            );
-                          },
-                        ),
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _firestore
+                  .collection('emergency_requests')
+                  .where('providerId', isEqualTo: user.uid)
+                  .where('status', whereIn: _selectedFilter == 'all' ? ['pending', 'accepted', 'declined', 'cancelled_by_system'] : [_selectedFilter])
+                  .orderBy('timestamp', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                    return Center(child: Text("Error fetching requests: ${snapshot.error}"));
+                }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return _buildEmptyState();
+                }
 
-  // Build dashboard statistics section
-  Widget _buildStatsSection() {
-    final pendingCount = _requests.where((r) => r.status == 'pending').length;
-    final acceptedCount = _requests.where((r) => r.status == 'accepted').length;
-    final totalCount = _requests.length;
+                final requests = snapshot.data!.docs.map((doc) => EmergencyRequest.fromFirestore(doc)).toList();
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.green[50],
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildStatCard(
-              'Total Requests',
-              totalCount.toString(),
-              Icons.all_inbox,
-              Colors.blue,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildStatCard(
-              'Pending',
-              pendingCount.toString(),
-              Icons.pending_actions,
-              Colors.orange,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildStatCard(
-              'Accepted',
-              acceptedCount.toString(),
-              Icons.check_circle,
-              Colors.green,
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: requests.length,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _buildRequestCard(requests[index]),
+                    );
+                  },
+                );
+              },
             ),
           ),
         ],
@@ -227,47 +239,12 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
     );
   }
 
-  // Build individual stat card
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Build filter tabs
   Widget _buildFilterTabs() {
     final filters = [
-      {'key': 'all', 'label': 'All'},
       {'key': 'pending', 'label': 'Pending'},
       {'key': 'accepted', 'label': 'Accepted'},
       {'key': 'declined', 'label': 'Declined'},
+      {'key': 'all', 'label': 'All'},
     ];
 
     return Container(
@@ -278,16 +255,17 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: FilterChip(
+              child: ChoiceChip(
                 label: Text(filter['label']!),
                 selected: isSelected,
                 onSelected: (selected) {
-                  setState(() {
-                    _selectedFilter = filter['key']!;
-                  });
+                  if (selected) {
+                    setState(() {
+                      _selectedFilter = filter['key']!;
+                    });
+                  }
                 },
                 selectedColor: Colors.green.withOpacity(0.2),
-                checkmarkColor: Colors.green,
               ),
             ),
           );
@@ -296,222 +274,69 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
     );
   }
 
-  // Build request card
+  // ** MODIFICATION: Updated card to use live data and new accept/decline methods **
   Widget _buildRequestCard(EmergencyRequest request) {
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header row
             Row(
               children: [
-                // Service type icon
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: request.priorityColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    request.serviceIcon,
-                    style: const TextStyle(fontSize: 20),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                
-                // Request info
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        request.requesterName,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        'Request: ${request.itemQuantity} ${request.itemUnit} of ${request.itemName}',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        request.serviceType.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      const SizedBox(height: 4),
+                      Text('From: ${request.requesterName}', style: TextStyle(fontSize: 14, color: Colors.grey[700])),
                     ],
                   ),
                 ),
-                
-                // Priority badge
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: request.priorityColor,
+                    color: request.statusColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    request.priority.toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    request.status.toUpperCase().replaceAll('_', ' '),
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            
-            // Description
-            Text(
-              request.description,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[700],
-              ),
-            ),
-            const SizedBox(height: 12),
-            
-            // Location and time info
-            Row(
-              children: [
-                Icon(
-                  Icons.location_on,
-                  size: 14,
-                  color: Colors.grey[600],
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    request.address,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.access_time,
-                  size: 14,
-                  color: Colors.grey[600],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  _getTimeAgo(request.timestamp),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            
-            // Contact info
-            Row(
-              children: [
-                Icon(
-                  Icons.phone,
-                  size: 14,
-                  color: Colors.grey[600],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  request.requesterPhone,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: _getStatusColor(request.status).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: _getStatusColor(request.status).withOpacity(0.3),
-                    ),
-                  ),
-                  child: Text(
-                    request.status.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: _getStatusColor(request.status),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            
-            // Action buttons (only show for pending requests)
+            if (request.description.isNotEmpty) ...[
+              Text(request.description, style: TextStyle(fontSize: 14, color: Colors.grey[800])),
+              const SizedBox(height: 12),
+            ],
+            Text('Time: ${_formatDateTime(request.timestamp)}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
             if (request.status == 'pending') ...[
               const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => _handleRequestAction(request, 'declined'),
+                      onPressed: () => _declineRequest(request),
                       icon: const Icon(Icons.close, size: 16),
                       label: const Text('Decline'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => _handleRequestAction(request, 'accepted'),
+                      onPressed: () => _acceptRequest(request),
                       icon: const Icon(Icons.check, size: 16),
                       label: const Text('Accept'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            
-            // Additional actions for accepted requests
-            if (request.status == 'accepted') ...[
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _callRequester(request),
-                      icon: const Icon(Icons.phone, size: 16),
-                      label: const Text('Call Requester'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _showLocationDialog(request),
-                      icon: const Icon(Icons.map, size: 16),
-                      label: const Text('View Location'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
                     ),
                   ),
                 ],
@@ -523,7 +348,6 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
     );
   }
 
-  // Build empty state
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -531,218 +355,34 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.inbox_outlined,
-              size: 64,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.inbox_outlined, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              _selectedFilter == 'all' 
-                  ? 'No requests available'
-                  : 'No ${_selectedFilter} requests',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[600],
-              ),
+              'No $_selectedFilter requests',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[600]),
             ),
             const SizedBox(height: 8),
-            Text(
-              _selectedFilter == 'all'
-                  ? 'Emergency requests will appear here when received'
-                  : 'Try switching to a different filter',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey[500],
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _loadRequests,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Refresh'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Handle request action (accept/decline)
-  void _handleRequestAction(EmergencyRequest request, String action) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${action == 'accepted' ? 'Accept' : 'Decline'} Request'),
-        content: Text(
-          'Are you sure you want to ${action == 'accepted' ? 'accept' : 'decline'} '
-          'this emergency request from ${request.requesterName}?'
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _updateRequestStatus(request, action);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: action == 'accepted' ? Colors.green : Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: Text(action == 'accepted' ? 'Accept' : 'Decline'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Update request status (mock implementation)
-  void _updateRequestStatus(EmergencyRequest request, String newStatus) {
-    setState(() {
-      final index = _requests.indexWhere((r) => r.id == request.id);
-      if (index != -1) {
-        // In a real app, this would update the backend
-        // For demo purposes, we'll just update locally
-        _requests[index] = EmergencyRequest(
-          id: request.id,
-          requesterName: request.requesterName,
-          requesterPhone: request.requesterPhone,
-          serviceType: request.serviceType,
-          description: request.description,
-          latitude: request.latitude,
-          longitude: request.longitude,
-          address: request.address,
-          timestamp: request.timestamp,
-          status: newStatus,
-          priority: request.priority,
-        );
-      }
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Request ${newStatus} successfully'),
-        backgroundColor: newStatus == 'accepted' ? Colors.green : Colors.red,
-      ),
-    );
-  }
-
-  // Call requester (mock implementation)
-  void _callRequester(EmergencyRequest request) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Call Requester'),
-        content: Text(
-          'Call ${request.requesterName} at ${request.requesterPhone}?\n\n'
-          'This is a demo app - no actual call will be made.'
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Calling ${request.requesterName}...')),
-              );
-            },
-            child: const Text('Call'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Show location dialog
-  void _showLocationDialog(EmergencyRequest request) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Request Location'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Address: ${request.address}'),
-            const SizedBox(height: 8),
-            Text('Coordinates: ${request.latitude.toStringAsFixed(4)}, ${request.longitude.toStringAsFixed(4)}'),
-            const SizedBox(height: 16),
             const Text(
-              'In a real app, this would open navigation to the location.',
-              style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
+              'New requests from users will appear here.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // In a real app, this would open maps/navigation
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Opening navigation...')),
-              );
-            },
-            child: const Text('Navigate'),
-          ),
-        ],
       ),
     );
   }
 
-  // Get status color
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return Colors.orange;
-      case 'accepted':
-        return Colors.green;
-      case 'declined':
-        return Colors.red;
-      case 'completed':
-        return Colors.blue;
-      default:
-        return Colors.grey;
-    }
+  String _formatDateTime(DateTime dt) {
+    return "${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
   }
 
-  // Get time ago string
-  String _getTimeAgo(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-
-    if (difference.inMinutes < 1) {
-      return 'Just now';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
-    } else {
-      return '${difference.inDays}d ago';
-    }
-  }
-
-  // Show error message
   void _showErrorSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
-        action: SnackBarAction(
-          label: 'Retry',
-          textColor: Colors.white,
-          onPressed: _loadRequests,
-        ),
       ),
     );
   }

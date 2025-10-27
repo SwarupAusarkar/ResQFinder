@@ -29,7 +29,7 @@ class LiveDataService {
       
       return querySnapshot.docs.map((doc) {
         final data = doc.data();
-        return Provider.fromJson(data);
+        return Provider.fromJson(doc.id, doc.data() as Map<String, dynamic>);
       }).toList();
     } catch (e) {
       print('Error searching providers by service: $e');
@@ -58,7 +58,7 @@ class LiveDataService {
 
       allProviders.addAll(firestoreProviders.docs.map((doc) {
         final data = doc.data();
-        return Provider.fromJson(data);
+        return Provider.fromJson(doc.id, doc.data() as Map<String, dynamic>);
       }));
     } catch (e) {
       print('Error fetching Firestore providers: $e');
