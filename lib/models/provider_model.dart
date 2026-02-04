@@ -15,7 +15,7 @@ class Provider {
   final int rating; // Rating out of 5
   final String description;
   final List<InventoryItem> inventory;
-
+  final int noOfApprovedRequests;
   Provider({
     required this.id,
     required this.name,
@@ -29,6 +29,7 @@ class Provider {
     required this.rating,
     required this.description,
     this.inventory = const [],
+    required this.noOfApprovedRequests,
   });
 
   // Create Provider object from JSON data
@@ -45,12 +46,16 @@ class Provider {
       isAvailable: json['isAvailable'] ?? true,
       rating: (json['rating'] as num?)?.toInt() ?? 0,
       description: json['description'] ?? '',
-      inventory: (json['inventory'] as List<dynamic>? ?? [])
-          .map((item) => InventoryItem.fromMap(item as Map<String, dynamic>))
-          .toList(),
+      inventory:
+          (json['inventory'] as List<dynamic>? ?? [])
+              .map(
+                (item) => InventoryItem.fromMap(item as Map<String, dynamic>),
+              )
+              .toList(),
+      noOfApprovedRequests: 0,
     );
   }
-  
+
   Provider copyWith({
     double? distance,
     bool? isAvailable,
@@ -69,6 +74,7 @@ class Provider {
       rating: this.rating,
       description: this.description,
       inventory: inventory ?? this.inventory,
+      noOfApprovedRequests: 0,
     );
   }
 
@@ -94,7 +100,9 @@ class Provider {
 
   // Check if provider offers a specific service
   bool offersService(String service) {
-    return inventory.any((item) => item.name.toLowerCase().contains(service.toLowerCase()));
+    return inventory.any(
+      (item) => item.name.toLowerCase().contains(service.toLowerCase()),
+    );
   }
 
   // Get services as a formatted string

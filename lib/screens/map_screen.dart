@@ -122,9 +122,13 @@ class _MapScreenState extends State<MapScreen> {
                 initialZoom: 13.0,
               ),
               children: [
+                // TileLayer(
+                //   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                //   userAgentPackageName: 'com.example.emergency_resource_locator',
+                // ),
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.example.emergency_resource_locator',
+                  urlTemplate: "https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
+                  userAgentPackageName: "com.cityissues.app",
                 ),
                 MarkerLayer(markers: _buildMarkers()),
               ],

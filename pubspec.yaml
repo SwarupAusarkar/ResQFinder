@@ -11,22 +11,22 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  
+
   firebase_core: ^4.1.1
   firebase_auth: ^6.1.0
   cloud_firestore: ^6.0.2
-
-  
-  # Location and mapping
+  firebase_messaging: ^16.0.2
+  flutter_local_notifications: ^20.0.0
+  flutterfire_cli: ^1.3.1
+  fluttertoast: ^9.0.0
   geolocator: ^14.0.2
   flutter_map: ^8.2.2
   latlong2: ^0.9.0
-  
-  # HTTP client for API calls
+  flutter_contacts_service: ^0.0.3
+  permission_handler: ^12.0.1
   http: ^1.1.2
-
   url_launcher: ^6.2.6
-
+  geocoding: ^4.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

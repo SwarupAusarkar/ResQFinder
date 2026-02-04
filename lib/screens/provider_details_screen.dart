@@ -273,7 +273,7 @@ class ProviderDetailsScreen extends StatelessWidget {
                               context,
                               MaterialPageRoute(
                                 builder: (context) => SendRequestScreen(
-                                  provider: provider,
+                                  // provider: provider,
                                   inventoryItem: item,
                                 ),
                               ),

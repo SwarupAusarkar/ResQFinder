@@ -1,12 +1,14 @@
+import 'package:emergency_res_loc_new/screens/OfferApprovalScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
+import '../models/inventory_item_model.dart';
 import '../models/provider_model.dart';
 import '../data/data_service.dart';
 import '../widgets/provider_card.dart';
 import '../data/live_data_service.dart';
+import '../screens/send_request_screen.dart';
 
-// Screen showing list of providers with live inventory search
 class ProviderListScreen extends StatefulWidget {
   const ProviderListScreen({super.key});
 
@@ -20,19 +22,17 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
   bool _isLoading = true;
   bool _isSearching = false;
   String _serviceType = '';
-  String _sortBy = 'distance'; // distance, rating, availability
-  bool _showAvailableOnly = false;
+  String _sortBy = 'distance';
+  bool _showAvailableOnly = true;
   Position? _currentPosition;
-  double _selectedRadius = 50000; // Default to 50km to show all initially
-  
-  // Search related
+  double _selectedRadius = 50000;
+
   final TextEditingController _searchController = TextEditingController();
   String _currentSearchQuery = '';
   Timer? _searchDebouncer;
   List<String> _searchSuggestions = [];
   bool _showSuggestions = false;
 
-  // Common emergency services for suggestions
   final List<String> _commonServices = [
     'ICU Bed',
     'Emergency Surgery',
@@ -56,7 +56,6 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchTextChanged);
-    // Use a post-frame callback to safely access ModalRoute
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeAndLoadProviders();
     });
@@ -71,12 +70,12 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
 
   void _onSearchTextChanged() {
     final query = _searchController.text;
-    
-    // Update suggestions
+
     if (query.isNotEmpty) {
       setState(() {
         _searchSuggestions = _commonServices
-            .where((service) => service.toLowerCase().contains(query.toLowerCase()))
+            .where((service) =>
+            service.toLowerCase().contains(query.toLowerCase()))
             .take(5)
             .toList();
         _showSuggestions = true;
@@ -88,16 +87,16 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
       });
     }
 
-    // Debounce the search
     _searchDebouncer?.cancel();
     _searchDebouncer = Timer(const Duration(milliseconds: 500), () {
       _performSearch(query);
     });
   }
 
+  // IMPROVED: Better search logic - searches both provider name and services
   Future<void> _performSearch(String query) async {
     if (!mounted) return;
-    
+
     setState(() {
       _currentSearchQuery = query;
       _isSearching = query.isNotEmpty;
@@ -105,55 +104,63 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     });
 
     if (query.isEmpty) {
-      // If search is cleared, show all providers with current filters
+      setState(() {
+        _filteredProviders = List.from(_allProviders);
+      });
       _applyFiltersAndSort();
       return;
     }
 
     try {
-      setState(() {
-        _isLoading = true;
-      });
+      setState(() => _isLoading = true);
 
-      List<Provider> searchResults;
-      
-      // Try live service first, fallback to static data
-      try {
-        searchResults = await LiveDataService.searchProvidersByService(
-          service: query,
-          latitude: _currentPosition?.latitude ?? 19.0760,
-          longitude: _currentPosition?.longitude ?? 72.8777,
+      final lowerQuery = query.toLowerCase();
+
+      // Search by provider name AND inventory items
+      List<Provider> searchResults = _allProviders.where((provider) {
+        final nameMatch = provider.name.toLowerCase().contains(lowerQuery);
+        final inventoryMatch = provider.inventory.any(
+              (item) => item.name.toLowerCase().contains(lowerQuery),
         );
-      } catch (e) {
-        debugPrint("⚠️ Live search failed, searching static data: $e");
-        searchResults = await DataService.searchProvidersByService(query);
-      }
+        return nameMatch || inventoryMatch;
+      }).toList();
 
-      // Calculate distances if position is available
-      if (_currentPosition != null) {
-        searchResults = searchResults.map((provider) {
-          final distanceInMeters = Geolocator.distanceBetween(
-            _currentPosition!.latitude,
-            _currentPosition!.longitude,
-            provider.latitude,
-            provider.longitude,
+      // If local search yields no results, try live service
+      if (searchResults.isEmpty) {
+        try {
+          searchResults = await LiveDataService.searchProvidersByService(
+            service: query,
+            latitude: _currentPosition?.latitude ?? 19.0760,
+            longitude: _currentPosition?.longitude ?? 72.8777,
           );
-          return provider.copyWith(distance: distanceInMeters / 1000);
-        }).toList();
+
+          // Calculate distances for live results
+          if (_currentPosition != null) {
+            searchResults = searchResults.map((provider) {
+              final distanceInMeters = Geolocator.distanceBetween(
+                _currentPosition!.latitude,
+                _currentPosition!.longitude,
+                provider.latitude,
+                provider.longitude,
+              );
+              return provider.copyWith(distance: distanceInMeters / 1000);
+            }).toList();
+          }
+        } catch (e) {
+          debugPrint("Live search failed: $e");
+        }
       }
 
       if (mounted) {
         setState(() {
-          _allProviders = searchResults;
+          _filteredProviders = searchResults;
           _isLoading = false;
         });
         _applyFiltersAndSort();
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
         _showErrorSnackBar('Search failed: $e');
       }
     }
@@ -173,15 +180,16 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
       _currentSearchQuery = '';
       _isSearching = false;
       _showSuggestions = false;
+      _filteredProviders = List.from(_allProviders);
     });
-    _loadProviders(); // Reload original providers
+    _applyFiltersAndSort();
   }
 
   Future<void> _initializeAndLoadProviders() async {
     await _determinePosition();
     await _loadProviders();
   }
-  
+
   Future<void> _determinePosition() async {
     bool serviceEnabled;
     LocationPermission permission;
@@ -200,25 +208,24 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
         return;
       }
     }
-    
+
     if (permission == LocationPermission.deniedForever) {
       _showErrorSnackBar('Location permissions are permanently denied.');
       return;
-    } 
+    }
 
     try {
       final position = await Geolocator.getCurrentPosition();
-       if(mounted){
+      if (mounted) {
         setState(() {
           _currentPosition = position;
         });
-       }
-    } catch(e) {
+      }
+    } catch (e) {
       _showErrorSnackBar('Could not get current location.');
     }
   }
 
-  // Load providers based on service type from navigation arguments
   Future<void> _loadProviders() async {
     if (!mounted) return;
     setState(() {
@@ -226,7 +233,8 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     });
 
     try {
-      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final args =
+      ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       _serviceType = args?['serviceType'] ?? 'hospital';
 
       List<Provider> providers;
@@ -237,7 +245,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
           longitude: _currentPosition?.longitude ?? 72.8777,
         );
       } catch (e) {
-        debugPrint("⚠️ Live data failed, falling back to static: $e");
+        debugPrint("Live data failed, falling back to static: $e");
         providers = await DataService.getProvidersByType(_serviceType);
       }
 
@@ -249,7 +257,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
             provider.latitude,
             provider.longitude,
           );
-          return provider.copyWith(distance: distanceInMeters / 1000); // Convert to km
+          return provider.copyWith(distance: distanceInMeters / 1000);
         }).toList();
       }
 
@@ -270,22 +278,22 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     }
   }
 
-  // Apply filters and sorting
   void _applyFiltersAndSort() {
     setState(() {
-      List<Provider> tempProviders = List.from(_allProviders);
-      
-      // Apply radius filter if a position is available
-      if(_currentPosition != null) {
-         tempProviders = tempProviders.where((p) => (p.distance * 1000) <= _selectedRadius).toList();
+      List<Provider> tempProviders = _isSearching
+          ? List.from(_filteredProviders)
+          : List.from(_allProviders);
+
+      if (_currentPosition != null) {
+        tempProviders = tempProviders
+            .where((p) => (p.distance * 1000) <= _selectedRadius)
+            .toList();
       }
 
-      // Apply availability filter
       if (_showAvailableOnly) {
-         tempProviders = tempProviders.where((p) => p.isAvailable).toList();
+        tempProviders = tempProviders.where((p) => p.isAvailable).toList();
       }
-      
-      // Apply sorting
+
       switch (_sortBy) {
         case 'distance':
           tempProviders.sort((a, b) => a.distance.compareTo(b.distance));
@@ -322,64 +330,85 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
             onPressed: _showFilterDialog,
             tooltip: 'Filter & Sort',
           ),
+          IconButton(
+            icon: const Icon(Icons.checklist),
+            onPressed: (){Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => approval_screen()
+              ),
+            );
+            },
+            tooltip: 'Filter & Sort',
+          ),
+
         ],
       ),
       body: Column(
         children: [
-          // Search bar
           _buildSearchBar(),
-          
-          // Search suggestions
           if (_showSuggestions) _buildSearchSuggestions(),
-          
-          // Filter and sort info bar
           _buildInfoBar(),
-          
-          // Providers list
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredProviders.isEmpty
-                    ? _buildEmptyState()
-                    : RefreshIndicator(
-                        onRefresh: _isSearching ? () => _performSearch(_currentSearchQuery) : _loadProviders,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _filteredProviders.length,
-                          itemBuilder: (context, index) {
-                            final provider = _filteredProviders[index];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: ProviderCard(
-                                provider: provider,
-                                onTap: () => _navigateToProviderDetails(provider),
-                                searchQuery: _currentSearchQuery, // Pass search query for highlighting
-                              ),
-                            );
-                          },
-                        ),
-                      ),
+                ? _buildEmptyState()
+                : RefreshIndicator(
+              onRefresh: _isSearching
+                  ? () => _performSearch(_currentSearchQuery)
+                  : _loadProviders,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _filteredProviders.length,
+                itemBuilder: (context, index) {
+                  final provider = _filteredProviders[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: ProviderCard(
+                      provider: provider,
+                      onTap: () => _navigateToProviderDetails(provider),
+                      searchQuery: _currentSearchQuery,
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
         ],
       ),
       floatingActionButton: _filteredProviders.isNotEmpty
           ? FloatingActionButton.extended(
-              onPressed: _openMapView,
-              backgroundColor: _getServiceColor(),
-              icon: const Icon(Icons.map, color: Colors.white),
-              label: const Text(
-                'Map View',
-                style: TextStyle(color: Colors.white),
-              ),
-            )
+        onPressed:() {
+      Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SendRequestScreen(
+          inventoryItem: InventoryItem(
+            name: 'Select Item',
+            quantity: 0,
+            unit: 'Units',
+            lastUpdated: DateTime.now(),
+          ),
+        ),
+      ),
+    );
+  },
+        backgroundColor: _getServiceColor(),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text(
+          'New  Request',
+          style: TextStyle(color: Colors.white),
+        ),
+      )
           : null,
     );
   }
 
-  // Build search bar
+  // FIXED: Resolved overflow issues with flexible layout
   Widget _buildSearchBar() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.grey[50],
         border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
@@ -390,13 +419,13 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search for services (e.g., ICU Bed, Ambulance)',
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                hintText: 'Search services or providers...',
+                prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear, color: Colors.grey),
-                        onPressed: _clearSearch,
-                      )
+                  icon: const Icon(Icons.clear),
+                  onPressed: _clearSearch,
+                )
                     : null,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -404,33 +433,37 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
                 ),
                 filled: true,
                 fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
               ),
-              onSubmitted: _performSearch,
             ),
           ),
           if (_isSearching) ...[
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: _getServiceColor().withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: _getServiceColor().withOpacity(0.3)),
+                border: Border.all(
+                  color: _getServiceColor().withOpacity(0.3),
+                ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     Icons.search,
-                    size: 16,
+                    size: 14,
                     color: _getServiceColor(),
                   ),
                   const SizedBox(width: 4),
                   Text(
                     'Active',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       color: _getServiceColor(),
                       fontWeight: FontWeight.w600,
                     ),
@@ -444,7 +477,6 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     );
   }
 
-  // Build search suggestions dropdown
   Widget _buildSearchSuggestions() {
     return Container(
       decoration: BoxDecoration(
@@ -465,9 +497,11 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
           final suggestion = _searchSuggestions[index];
           return ListTile(
             dense: true,
-            leading: Icon(Icons.medical_services, 
-                        size: 18, 
-                        color: Colors.grey[600]),
+            leading: Icon(
+              Icons.medical_services,
+              size: 18,
+              color: Colors.grey[600],
+            ),
             title: Text(suggestion),
             onTap: () => _selectSuggestion(suggestion),
           );
@@ -476,84 +510,87 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     );
   }
 
-  // Build information bar showing current filters
+  // FIXED: Improved info bar with better overflow handling
   Widget _buildInfoBar() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       color: _getServiceColor().withOpacity(0.1),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${_filteredProviders.length} ${_filteredProviders.length == 1 ? 'provider' : 'providers'} found',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: _getServiceColor(),
-                  ),
-                ),
-                if (_isSearching)
-                  Text(
-                    'Searching for: "$_currentSearchQuery"',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (_showAvailableOnly)
-            Chip(
-              label: const Text(
-                'Available Only',
-                style: TextStyle(fontSize: 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            Text(
+              '${_filteredProviders.length} ${_filteredProviders.length == 1 ? 'provider' : 'providers'}',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: _getServiceColor(),
+                fontSize: 13,
               ),
-              backgroundColor: Colors.green.withOpacity(0.2),
-              deleteIcon: const Icon(Icons.close, size: 16),
-              onDeleted: () {
-                setState(() {
-                  _showAvailableOnly = false;
-                });
-                _applyFiltersAndSort();
-              },
             ),
-          if (_selectedRadius < 50000)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4.0),
-              child: Chip(
+            if (_isSearching) ...[
+              const SizedBox(width: 8),
+              Container(
+                constraints: const BoxConstraints(maxWidth: 150),
+                child: Text(
+                  '"$_currentSearchQuery"',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontStyle: FontStyle.italic,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+            const SizedBox(width: 12),
+            if (_showAvailableOnly)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: Chip(
+                  label: const Text(
+                    'Available',
+                    style: TextStyle(fontSize: 10),
+                  ),
+                  backgroundColor: Colors.green.withOpacity(0.2),
+                  deleteIcon: const Icon(Icons.close, size: 14),
+                  onDeleted: () {
+                    setState(() => _showAvailableOnly = false);
+                    _applyFiltersAndSort();
+                  },
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            if (_selectedRadius < 50000)
+              Chip(
                 label: Text(
-                  'Within ${_selectedRadius ~/ 1000} km',
+                  '${_selectedRadius ~/ 1000}km',
                   style: const TextStyle(fontSize: 10),
                 ),
                 backgroundColor: Colors.blue.withOpacity(0.1),
-                deleteIcon: const Icon(Icons.close, size: 16),
+                deleteIcon: const Icon(Icons.close, size: 14),
                 onDeleted: () {
-                  setState(() {
-                    _selectedRadius = 50000;
-                  });
+                  setState(() => _selectedRadius = 50000);
                   _applyFiltersAndSort();
                 },
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+            const SizedBox(width: 8),
+            Text(
+              'Sort: ${_getSortTitle(_sortBy)}',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
               ),
             ),
-          const SizedBox(width: 8),
-          Text(
-            'Sort: ${_sortBy.toUpperCase()}',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  // Build empty state
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -568,7 +605,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              _isSearching 
+              _isSearching
                   ? 'No providers found for "$_currentSearchQuery"'
                   : 'No providers found',
               style: TextStyle(
@@ -581,12 +618,10 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
             const SizedBox(height: 8),
             Text(
               _isSearching
-                  ? 'Try a different search term or clear the search to see all providers.'
+                  ? 'Try a different search term or clear the search.'
                   : 'Try adjusting your filters or increasing the radius.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey[500],
-              ),
+              style: TextStyle(color: Colors.grey[500]),
             ),
             const SizedBox(height: 24),
             if (_isSearching) ...[
@@ -598,7 +633,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
               const SizedBox(height: 8),
             ],
             ElevatedButton.icon(
-              onPressed: _isSearching 
+              onPressed: _isSearching
                   ? () => _performSearch(_currentSearchQuery)
                   : _loadProviders,
               icon: const Icon(Icons.refresh),
@@ -610,7 +645,6 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     );
   }
 
-  // Show filter and sort dialog
   void _showFilterDialog() {
     showDialog(
       context: context,
@@ -624,8 +658,10 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Availability filter
-                    const Text('Filter by Status', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Filter by Status',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     CheckboxListTile(
                       title: const Text('Show available only'),
                       subtitle: const Text('Hide busy providers'),
@@ -637,26 +673,32 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
                       },
                     ),
                     const Divider(),
-                    // Radius filter
-                    const Text('Filter by Distance', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Filter by Distance',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     const SizedBox(height: 8),
-                     Wrap(
-                        spacing: 8.0,
-                        children: [5000, 10000, 25000, 50000].map((radius) {
-                          return ChoiceChip(
-                            label: Text(radius >= 50000 ? 'All' : '${radius ~/ 1000} km'),
-                            selected: _selectedRadius == radius.toDouble(),
-                            onSelected: (selected) {
-                               setDialogState(() {
-                                _selectedRadius = radius.toDouble();
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
+                    Wrap(
+                      spacing: 8.0,
+                      children: [5000, 10000, 25000, 50000].map((radius) {
+                        return ChoiceChip(
+                          label: Text(
+                            radius >= 50000 ? 'All' : '${radius ~/ 1000} km',
+                          ),
+                          selected: _selectedRadius == radius.toDouble(),
+                          onSelected: (selected) {
+                            setDialogState(() {
+                              _selectedRadius = radius.toDouble();
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
                     const Divider(),
-                    // Sort options
-                    const Text('Sort by', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Sort by',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     ...['distance', 'rating', 'availability'].map((option) {
                       return RadioListTile<String>(
                         title: Text(_getSortTitle(option)),
@@ -692,16 +734,10 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     );
   }
 
-  // Navigate to provider details
   void _navigateToProviderDetails(Provider provider) {
-    Navigator.pushNamed(
-      context,
-      '/provider-details',
-      arguments: provider,
-    );
+    Navigator.pushNamed(context, '/provider-details', arguments: provider);
   }
 
-  // Open map view with current providers
   void _openMapView() {
     Navigator.pushNamed(
       context,
@@ -714,7 +750,6 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     );
   }
 
-  // Get screen title based on service type
   String _getScreenTitle() {
     switch (_serviceType.toLowerCase()) {
       case 'hospital':
@@ -728,7 +763,6 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     }
   }
 
-  // Get service-specific color
   Color _getServiceColor() {
     switch (_serviceType.toLowerCase()) {
       case 'hospital':
@@ -742,7 +776,6 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     }
   }
 
-  // Get service-specific icon
   IconData _getServiceIcon() {
     switch (_serviceType.toLowerCase()) {
       case 'hospital':
@@ -756,7 +789,6 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     }
   }
 
-  // Get sort title for display
   String _getSortTitle(String sortBy) {
     switch (sortBy) {
       case 'distance':
@@ -770,9 +802,9 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     }
   }
 
-  // Show error message
   void _showErrorSnackBar(String message) {
-    if(!mounted) return;
+    if (!mounted)
+    return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
