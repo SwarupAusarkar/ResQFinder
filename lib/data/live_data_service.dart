@@ -109,7 +109,7 @@ class LiveDataService {
             isAvailable: true,
             rating: 4,
             description: "Live $serviceType from OpenStreetMap",
-            inventory: [], // OSM data won't have inventory
+            inventory: [], noOfApprovedRequests: 0, // OSM data won't have inventory
           );
         }));
       }

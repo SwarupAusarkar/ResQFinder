@@ -1,3 +1,5 @@
+import 'package:emergency_res_loc_new/screens/request_history_screen.dart';
+import 'package:emergency_res_loc_new/screens/requester_profile_screen.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 
@@ -44,6 +46,26 @@ class ServiceSelectionScreen extends StatelessWidget {
             icon: const Icon(Icons.logout),
             tooltip: 'Sign Out',
             onPressed: () => _signOut(context),
+          ),
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: 'Profile',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const RequesterProfileScreen()),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'Request history',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const RequesterHistoryScreen()),
+              );
+            },
           ),
         ],
       ),

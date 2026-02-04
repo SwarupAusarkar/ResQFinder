@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/auth_service.dart';
+import '../services/location_service.dart';
 
 class ProviderProfileEditScreen extends StatefulWidget {
   const ProviderProfileEditScreen({super.key});
@@ -236,8 +237,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
                           ),
                           const SizedBox(height: 12),
                           ElevatedButton.icon(
-                            onPressed: _isSaving ? null : _updateLocation,
-                            icon: const Icon(Icons.gps_fixed),
+                            onPressed: _isSaving ? null : _updateLocation,icon: const Icon(Icons.gps_fixed),
                             label: const Text('Update Current Location'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.blue,
