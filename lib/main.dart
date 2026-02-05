@@ -1,5 +1,7 @@
 import 'package:emergency_res_loc_new/models/inventory_item_model.dart';
 import 'package:emergency_res_loc_new/models/provider_model.dart';
+import 'package:emergency_res_loc_new/services/FCMService.dart';
+import 'package:emergency_res_loc_new/services/location_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -20,60 +22,64 @@ void main() async {
   try {
     // Ensure Flutter is initialized
     WidgetsFlutterBinding.ensureInitialized();
-    
+
     print("✓ Flutter binding initialized");
-    
+
     // Initialize Firebase
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    
+    // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    //
+    // // Initialize Notifications
+    // await FCMService.initialize();
     print("✓ Firebase initialized");
-    
+
     // Request location permissions on startup (non-blocking)
     _requestLocationPermission().catchError((error) {
       print("⚠️ Location permission error: $error");
-      // Don't block app startup for location errors
     });
-    
+
     print("✓ Starting app...");
     runApp(const EmergencyResourceLocatorApp());
   } catch (e, stackTrace) {
     print("❌ Error in main: $e");
     print("Stack trace: $stackTrace");
-    
+
     // Run a minimal error screen
-    runApp(MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
-                const Text(
-                  "Initialization Error",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "$e",
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  "Please restart the app",
-                  style: TextStyle(fontSize: 14),
-                ),
-              ],
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Initialization Error",
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "$e",
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    "Please restart the app",
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
   }
 }
 
@@ -97,12 +103,14 @@ Future<void> _requestLocationPermission() async {
         return;
       }
     }
-    
+
     if (permission == LocationPermission.deniedForever) {
       print('⚠️ Location permissions are permanently denied');
       return;
     }
-    
+    Position position = await Geolocator.getCurrentPosition();
+    print(position.latitude);
+    print(position.longitude);
     print("✓ Location permissions granted");
   } catch (e) {
     print("⚠️ Location permission error: $e");
@@ -141,11 +149,16 @@ class EmergencyResourceLocatorApp extends StatelessWidget {
         '/provider-dashboard': (context) => ProviderDashboardScreen(),
         '/manage-services': (context) => const ManageServicesScreen(),
         '/manage-inventory': (context) => const ManageInventoryScreen(),
-        '/send-request': (context) => SendRequestScreen(
-          provider: Provider(id: '', name: '', type: '', phone: '', address: '', latitude: 0, longitude: 0, distance: 0, isAvailable: false, rating: 0, description: ''), // Placeholder
-          inventoryItem: InventoryItem(name: '', quantity: 0, unit: '', lastUpdated: DateTime.now()), // Placeholder
-        ),
-        
+        '/send-request':
+            (context) => SendRequestScreen(
+              // provider: Provider(id: '', name: '', type: '', phone: '', address: '', latitude: 0, longitude: 0, distance: 0, isAvailable: false, rating: 0, description: ''), // Placeholder
+              inventoryItem: InventoryItem(
+                name: '',
+                quantity: 0,
+                unit: '',
+                lastUpdated: DateTime.now(),
+              ), // Placeholder
+            ),
       },
     );
   }
