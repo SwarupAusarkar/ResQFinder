@@ -1,50 +1,80 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:async';
 import '../models/request_model.dart';
+import '../models/RequestOffer.dart';
 import '../services/auth_service.dart';
+import '../widgets/approvalCard.dart';
 
-class approval_screen extends StatefulWidget {
-  const approval_screen({super.key});
+class ApprovalScreen extends StatefulWidget {
+  const ApprovalScreen({super.key});
 
   @override
-  State<approval_screen> createState() => _approval_screenState();
+  State<ApprovalScreen> createState() => _ApprovalScreenState();
 }
 
-class _approval_screenState extends State<approval_screen> {
+class _ApprovalScreenState extends State<ApprovalScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final AuthService _authService = AuthService();
-  Timer? _timer;
+  bool _isProcessing = false;
 
-  @override
-  void initState() {
-    super.initState();
-    // Refresh the UI every minute to update the countdown timers
-    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      if (mounted) setState(() {});
-    });
+  String _generate6DigitCode() {
+    return (100000 + Random().nextInt(900000)).toString();
   }
 
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
+  Future<void> _handleOfferAction(EmergencyRequest request, RequestOffer selectedOffer, bool isApproving) async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
 
-  Future<void> _handleFinalAction(EmergencyRequest request, bool isConfirming) async {
     try {
-      await _firestore.collection('emergency_requests').doc(request.id).update({
-        'status': isConfirming ? 'confirmed' : 'expired_or_declined',
-        'confirmedAt': isConfirming ? FieldValue.serverTimestamp() : null,
+      final requestRef = _firestore.collection('emergency_requests').doc(request.id);
+
+      await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(requestRef);
+        if (!snapshot.exists) throw "Request not found";
+
+        if (isApproving) {
+          // Generate the 6-digit verification code
+          String vCode = _generate6DigitCode();
+
+          // Update ALL offers: the chosen one becomes 'confirmed', others become 'rejected'
+          List<Map<String, dynamic>> updatedOffers = request.offers.map((offer) {
+            var map = offer.toMap();
+            if (offer.providerId == selectedOffer.providerId) {
+              map['status'] = 'confirmed'; // Syncing with OfferApprovalCard logic
+            } else {
+              map['status'] = 'rejected';
+            }
+            return map;
+          }).toList();
+
+          transaction.update(requestRef, {
+            'status': 'confirmed',
+            'confirmedProviderId': selectedOffer.providerId,
+            'acceptedBy': selectedOffer.providerId,
+            'verificationCode': vCode,
+            'offers': updatedOffers,
+            'confirmedAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          // Decline logic: mark only the selected offer as rejected
+          List<Map<String, dynamic>> updatedOffers = request.offers.map((offer) {
+            var map = offer.toMap();
+            if (offer.providerId == selectedOffer.providerId) {
+              map['status'] = 'rejected';
+            }
+            return map;
+          }).toList();
+
+          transaction.update(requestRef, {'offers': updatedOffers});
+        }
       });
 
-      // If declining or expired, you might want to trigger the "Inventory Rollback" here
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isConfirming ? 'Provider Confirmed!' : 'Request Dismissed')),
-      );
+      // ... existing SnackBar logic ...
     } catch (e) {
-      print("Error updating status: $e");
+      // ... existing error logic ...
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
@@ -53,63 +83,148 @@ class _approval_screenState extends State<approval_screen> {
     final user = _authService.currentUser;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Approve Provider")),
+      appBar: AppBar(
+        title: const Text("Manage Offers"),
+        backgroundColor: Colors.red[700],
+        elevation: 0,
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _firestore
             .collection('emergency_requests')
             .where('requesterId', isEqualTo: user?.uid)
-            .where('status', isEqualTo: 'accepted')
+        // Listen for all active states
+            .where('status', whereIn: ['pending', 'provider_accepted', 'confirmed'])
             .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
+          // Sort by timestamp manually if Firestore ordering conflicts with 'whereIn'
           final requests = snapshot.data!.docs
               .map((doc) => EmergencyRequest.fromFirestore(doc))
-              .toList();
+              .toList()
+            ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-          if (requests.isEmpty) {
-            return const Center(child: Text("No providers waiting for approval."));
-          }
+          if (requests.isEmpty) return _buildEmptyState();
 
-          return ListView.builder(
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
             itemCount: requests.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 24),
             itemBuilder: (context, index) {
               final req = requests[index];
+              final visibleOffers = _getVisibleOffers(req);
 
-              // 5-Minute Logic
-              final expiryTime = req.acceptedAt!.add(const Duration(minutes: 5));
-              final remaining = expiryTime.difference(DateTime.now());
-              final isExpired = remaining.isNegative;
+              if (visibleOffers.isEmpty) return const SizedBox.shrink();
 
-              if (isExpired) {
-                // Auto-mark as expired in DB when UI detects it
-                _handleFinalAction(req, false);
-                return const SizedBox();
-              }
-
-              return Card(
-                margin: const EdgeInsets.all(10),
-                child: ListTile(
-                  title: Text("Provider ready for ${req.itemName}"),
-                  subtitle: Text("Expires in: ${remaining.inMinutes}m ${remaining.inSeconds % 60}s"),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.red),
-                        onPressed: () => _handleFinalAction(req, false),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.check, color: Colors.green),
-                        onPressed: () => _handleFinalAction(req, true),
-                      ),
-                    ],
-                  ),
-                ),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildRequestHeader(req),
+                  const SizedBox(height: 12),
+                  ...visibleOffers.map((offer) => OfferApprovalCard(
+                    request: req,
+                    offer: offer,
+                    onAction: (off, isApprove) => _handleOfferAction(req, off, isApprove),
+                  )),
+                ],
               );
             },
           );
         },
       ),
     );
-  } }
+  }
+  List<RequestOffer> _getVisibleOffers(EmergencyRequest request) {
+    if (request.status == 'confirmed') {
+      // Filter for the specific provider that was confirmed
+      return request.offers
+          .where((o) => o.providerId == request.confirmedProviderId || o.status == 'confirmed')
+          .toList();
+    } else {
+      // While pending, show all active (waiting) offers
+      return request.offers.where((o) => o.status == 'waiting').toList();
+    }
+  }
+
+  Widget _buildRequestHeader(EmergencyRequest request) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: request.status == 'confirmed' ? Colors.green[50] : Colors.blue[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: request.status == 'confirmed' ? Colors.green : Colors.blue,
+          width: 2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                request.status == 'confirmed' ? Icons.check_circle : Icons.pending_actions,
+                color: request.status == 'confirmed' ? Colors.green : Colors.orange,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${request.itemQuantity} ${request.itemUnit} of ${request.itemName}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            request.locationName,
+            style: TextStyle(color: Colors.grey[700], fontSize: 14),
+          ),
+          if (request.status == 'confirmed') ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.check, color: Colors.green, size: 16),
+                  SizedBox(width: 8),
+                  Text(
+                    'Provider confirmed!',
+                    style: TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inbox_outlined, size: 64, color: Colors.grey[400]),
+          const SizedBox(height: 16),
+          Text(
+            "No active requests",
+            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+          ),
+        ],
+      ),
+    );
+  }
+
+}

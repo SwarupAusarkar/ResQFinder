@@ -121,7 +121,7 @@ class DataService {
         itemName: 'ICU Bed',
         itemQuantity: 1,
         itemUnit: 'beds',
-        providerId: null, acceptedAt: DateTime.now(), acceptedBy: '', locationName: '', // not yet accepted
+        providerId: null, acceptedAt: DateTime.now(), confirmedProviderId: '', locationName: '', // not yet accepted
       ),
     ];
   }
