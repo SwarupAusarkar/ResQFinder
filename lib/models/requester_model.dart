@@ -10,6 +10,8 @@ class requester_model {
   final String alternatePhone;
   final List<EmergencyContact> emergencyContacts;
   final String location;
+  final bool sendSmsPermission; // Removed 'final ... = false' to allow constructor setting
+
   requester_model({
     required this.uid,
     required this.email,
@@ -20,9 +22,9 @@ class requester_model {
     required this.bloodGrp,
     required this.medicalNotes,
     required this.location,
+    required this.sendSmsPermission,
   });
 
-  // ✅ CORRECT FACTORY PATTERN
   factory requester_model.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return requester_model(
@@ -31,13 +33,13 @@ class requester_model {
       fullName: data['name'] ?? '',
       phone: data['phone'] ?? '',
       alternatePhone: data['alternatePhone'] ?? '',
-      emergencyContacts:
-          (data['emergencyContacts'] as List? ?? [])
-              .map((e) => EmergencyContact.fromMap(e))
-              .toList(),
-      bloodGrp: '',
-      medicalNotes: '',
-      location: '',
+      bloodGrp: data['bloodGrp'] ?? 'Unknown',
+      medicalNotes: data['medicalNotes'] ?? '',
+      location: data['location'] ?? '',
+      sendSmsPermission: data['sendSmsPermission'] ?? false,
+      emergencyContacts: (data['emergencyContacts'] as List? ?? [])
+          .map((e) => EmergencyContact.fromMap(e))
+          .toList(),
     );
   }
 }
@@ -58,10 +60,11 @@ class EmergencyContact {
     'phone': phone,
     'isSelected': isSelected,
   };
+
   factory EmergencyContact.fromMap(Map<String, dynamic> map) =>
       EmergencyContact(
-        name: map['name'],
-        phone: map['phone'],
+        name: map['name'] ?? 'Unknown',
+        phone: map['phone'] ?? '',
         isSelected: map['isSelected'] ?? false,
       );
 }

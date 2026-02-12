@@ -93,8 +93,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     });
   }
 
-  // IMPROVED: Better search logic - searches both provider name and services
-  Future<void> _performSearch(String query) async {
+ Future<void> _performSearch(String query) async {
     if (!mounted) return;
 
     setState(() {
@@ -335,7 +334,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
             onPressed: (){Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => approval_screen()
+                builder: (context) => ApprovalScreen()
               ),
             );
             },
@@ -405,7 +404,6 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     );
   }
 
-  // FIXED: Resolved overflow issues with flexible layout
   Widget _buildSearchBar() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -510,8 +508,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     );
   }
 
-  // FIXED: Improved info bar with better overflow handling
-  Widget _buildInfoBar() {
+ Widget _buildInfoBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       color: _getServiceColor().withOpacity(0.1),

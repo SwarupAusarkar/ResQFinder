@@ -1,122 +1,195 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/request_model.dart';
-import 'dart:async';
+import '../models/RequestOffer.dart';
 
-class ApprovalCard extends StatelessWidget {
+class OfferApprovalCard extends StatelessWidget {
   final EmergencyRequest request;
-  final Function(EmergencyRequest, bool) onAction; // true for confirm, false for decline
+  final RequestOffer offer;
+  final Function(RequestOffer, bool) onAction;
 
-  const ApprovalCard({
+  const OfferApprovalCard({
     super.key,
     required this.request,
+    required this.offer,
     required this.onAction,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Calculate remaining time
-    final expiryTime = request.acceptedAt!.add(const Duration(minutes: 5));
-    final remaining = expiryTime.difference(DateTime.now());
-    final minutes = remaining.inMinutes;
-    final seconds = remaining.inSeconds % 60;
+    final bool isWinner = (request.confirmedProviderId == offer.providerId &&
+        request.status == 'confirmed') ||
+        offer.status == 'confirmed';
+    final bool isWaiting = offer.status == 'waiting';
 
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    if (offer.status == 'rejected') return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isWinner ? Colors.green.shade300 : Colors.grey.shade300,
+          width: isWinner ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
       child: Column(
         children: [
-          // Timer Header
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: remaining.inMinutes < 1 ? Colors.red[100] : Colors.green[100],
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+          if (isWinner) _buildCompactHeader(),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
               children: [
-                Icon(Icons.timer_outlined, size: 16, color: remaining.inMinutes < 1 ? Colors.red : Colors.green),
-                const SizedBox(width: 8),
-                Text(
-                  "Confirm within: ${minutes}m ${seconds}s",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: remaining.inMinutes < 1 ? Colors.red[900] : Colors.green[900],
-                  ),
-                ),
+                _buildProviderRow(isWinner),
+                if (isWinner) _buildCompactVerificationCode(context),
+                if (isWaiting) _buildCompactActionButtons(),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
 
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Resource Details
-                Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: Colors.redAccent.withOpacity(0.1),
-                      child: const Icon(Icons.medical_services, color: Colors.redAccent),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            request.itemName,
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          Text("Quantity: ${request.itemQuantity} ${request.itemUnit}"),
-                        ],
-                      ),
-                    ),
-                  ],
+  Widget _buildCompactHeader() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.green.shade100,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      child: Center(
+        child: Text(
+          "SECURE HANDSHAKE ACTIVE",
+          style: TextStyle(
+            color: Colors.green.shade800,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProviderRow(bool isWinner) {
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 20,
+          backgroundColor: isWinner ? Colors.green.shade50 : Colors.orange.shade50,
+          child: Icon(Icons.medical_services_outlined,
+              size: 20, color: isWinner ? Colors.green : Colors.orange),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                offer.providerName,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              Text(
+                offer.providerPhone,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        if (isWinner)
+          Icon(Icons.verified, color: Colors.green.shade600, size: 22),
+      ],
+    );
+  }
+
+  Widget _buildCompactVerificationCode(BuildContext context) {
+    final code = request.verificationCode ?? "------";
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "VERIFICATION CODE",
+                style: TextStyle(
+                  color: Colors.green.shade700,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
                 ),
-
-                const Divider(height: 30),
-
-                // Note to User
-                const Text(
-                  "Help is ready! Confirming will finalize the request and provide you with a verification code for the provider.",
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                code,
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 6,
+                  fontFamily: 'monospace',
                 ),
+              ),
+            ],
+          ),
+          IconButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: code));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Copied'), behavior: SnackBarBehavior.floating),
+              );
+            },
+            icon: const Icon(Icons.copy_rounded, size: 20),
+            color: Colors.green.shade700,
+          ),
+        ],
+      ),
+    );
+  }
 
-                const SizedBox(height: 20),
-
-                // Action Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => onAction(request, false),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.grey[700],
-                          side: BorderSide(color: Colors.grey[300]!),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Text("Decline"),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => onAction(request, true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          elevation: 0,
-                        ),
-                        child: const Text("CONFIRM HELP"),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+  Widget _buildCompactActionButtons() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextButton(
+              onPressed: () => onAction(offer, false),
+              style: TextButton.styleFrom(foregroundColor: Colors.red.shade600),
+              child: const Text("Decline"),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: ElevatedButton(
+              onPressed: () => onAction(offer, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade500,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text("Approve Offer", style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],
