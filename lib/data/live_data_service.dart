@@ -19,9 +19,7 @@ class LiveDataService {
     try {
       final query = _firestore
           .collection('users')
-          // ** START: MODIFICATION **
           .where('userType', isEqualTo: 'provider') // Corrected from 'role'
-          // ** END: MODIFICATION **
           .where('profileComplete', isEqualTo: true)
           .where('inventory.name', arrayContains: service);
 

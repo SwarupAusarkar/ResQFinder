@@ -19,7 +19,7 @@ class EmergencyRequest {
   final String description;
   final List<String> declinedBy; // Default to empty list
   final DateTime acceptedAt;
-  final String confirmedProviderId;
+  final String acceptedBy;
   final List<RequestOffer> offers;
   final String? verificationCode;
   EmergencyRequest({
@@ -40,7 +40,7 @@ class EmergencyRequest {
     required String requesterId,
     required this.requesterPhone,
     required this.acceptedAt,
-    required this.confirmedProviderId,
+    required this.acceptedBy,
     this.offers = const [],
     this.verificationCode,
   });
@@ -64,7 +64,7 @@ class EmergencyRequest {
       itemQuantity: (data['itemQuantity'] as num?)?.toInt() ?? 0,
       itemUnit: data['itemUnit'] ?? '',
       acceptedAt: DateTime.now(),
-      confirmedProviderId: '',
+      acceptedBy: '',
       declinedBy: [],
       locationName: '',
       offers: [],
@@ -90,7 +90,7 @@ class EmergencyRequest {
       requesterPhone: data['requesterPhone'] ?? '',
       requesterId: '',
       acceptedAt: (data['timestamp'] as Timestamp).toDate(),
-      confirmedProviderId: '',
+      acceptedBy: '',
       offers:
           (data['offers'] as List? ?? [])
               .map((o) => RequestOffer.fromMap(o as Map<String, dynamic>))
