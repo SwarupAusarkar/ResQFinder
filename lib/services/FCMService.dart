@@ -68,7 +68,7 @@ class FCMService {
 
     // ✅ FIX: Using the correct named parameter 'onDidReceiveNotificationResponse'
     await _localNotifications.initialize(
-      settings: initializationSettings,
+      initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
         _handleLocalNotificationTap(response);
       },
@@ -89,8 +89,18 @@ class FCMService {
   static Future<void> _showLocalNotification(RemoteMessage message) async {
     final notification = message.notification;
     if (notification != null) {
-   await _localNotifications.show(// 3rd positional: body
-        notificationDetails: NotificationDetails(
+      // Ensure id is int and payload is String
+      int id = 0;
+      String? payload;
+      if (message.data['requestId'] != null) {
+        payload = message.data['requestId'].toString();
+        id = payload.hashCode;
+      }
+      await _localNotifications.show(
+        id,
+        notification.title,
+        notification.body,
+        NotificationDetails(
           android: AndroidNotificationDetails(
             _androidChannelId,
             _androidChannelName,
@@ -101,7 +111,7 @@ class FCMService {
           ),
           iOS: const DarwinNotificationDetails(),
         ),
-        payload: message.data['requestId'], id: message.data['requestId'],
+        payload: payload,
       );
     }
   }
