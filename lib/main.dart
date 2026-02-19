@@ -1,9 +1,7 @@
 import 'package:emergency_res_loc_new/models/inventory_item_model.dart';
 import 'package:emergency_res_loc_new/models/provider_model.dart';
 import 'package:emergency_res_loc_new/screens/provider_registration_screen.dart';
-import 'package:emergency_res_loc_new/screens/requester_registeration.dart';
-import 'package:emergency_res_loc_new/services/FCMService.dart';
-import 'package:emergency_res_loc_new/services/location_service.dart';
+import 'package:emergency_res_loc_new/screens/requester_registeration.dart';import 'package:emergency_res_loc_new/services/location_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';

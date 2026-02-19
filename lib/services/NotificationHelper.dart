@@ -82,7 +82,7 @@ class NotificationService {
     const initSettings = InitializationSettings(android: androidSettings);
 
     await _localNotifications.initialize(
-      settings: initSettings,
+       initSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
         // Handle notification tap when app is in foreground
         if (response.payload != null) {
@@ -152,10 +152,10 @@ class NotificationService {
     const notificationDetails = NotificationDetails(android: androidDetails);
 
     await _localNotifications.show(
-      id:message.hashCode,
-      title:message.notification?.title ?? 'Emergency Alert',
-      body:message.notification?.body ?? 'New emergency request nearby',
-      notificationDetails: notificationDetails,
+      message.hashCode,
+      message.notification?.title ?? 'Emergency Alert',
+     message.notification?.body ?? 'New emergency request nearby',
+       notificationDetails,
       payload: message.data['requestId'],
     );
   }
