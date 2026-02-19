@@ -1,9 +1,12 @@
+import 'dart:io'; 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance; 
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
   User? get currentUser => _auth.currentUser;
@@ -19,7 +22,7 @@ class AuthService {
   }) async {
     await _auth.verifyPhoneNumber(
       phoneNumber: phoneNumber,
-      verificationCompleted: (_) {}, // Handled manually via UI
+      verificationCompleted: (_) {}, 
       verificationFailed: onVerificationFailed,
       codeSent: onCodeSent,
       codeAutoRetrievalTimeout: (_) {},
@@ -32,7 +35,6 @@ class AuthService {
     required String password,
     required String verificationId,
     required String smsCode,
-    // Profile Data
     required String fullName,
     required String userType,
     required String phone,
@@ -45,25 +47,39 @@ class AuthService {
     bool? isNMCVerified,
     String? hfrId,
     String? nmcId,
+    
+    File? certificateImage,
+    List<File>? facilityImages,
   }) async {
     User? user;
     try {
-      // 1. Create Basic Account
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(email: email, password: password);
       user = userCredential.user;
 
       if (user != null) {
-        // 2. Link Phone to Account
-        PhoneAuthCredential credential = PhoneAuthProvider.credential(
-          verificationId: verificationId,
-          smsCode: smsCode,
-        );
+        PhoneAuthCredential credential = PhoneAuthProvider.credential(verificationId: verificationId, smsCode: smsCode);
         await user.linkWithCredential(credential);
 
-        // 3. Save Data to Firestore (Providers or Requesters)
+        String? certUrl;
+        List<String> facilityUrls = [];
+
+        if (userType == 'provider') {
+          if (certificateImage != null) {
+            final certRef = _storage.ref().child('provider_certs/${user.uid}_cert.jpg');
+            await certRef.putFile(certificateImage);
+            certUrl = await certRef.getDownloadURL();
+          }
+
+          if (facilityImages != null && facilityImages.isNotEmpty) {
+            for (int i = 0; i < facilityImages.length; i++) {
+              final facRef = _storage.ref().child('provider_facilities/${user.uid}/fac_img_$i.jpg');
+              await facRef.putFile(facilityImages[i]);
+              String url = await facRef.getDownloadURL();
+              facilityUrls.add(url);
+            }
+          }
+        }
+
         String collectionPath = (userType == 'provider') ? 'providers' : 'requesters';
         
         final Map<String, dynamic> userData = {
@@ -71,7 +87,7 @@ class AuthService {
           'email': email,
           'name': fullName,
           'userType': userType,
-          'phone': phone, // Verified!
+          'phone': phone,
           'createdAt': FieldValue.serverTimestamp(),
           'profileComplete': true,
         };
@@ -83,12 +99,15 @@ class AuthService {
             'longitude': longitude ?? 0.0,
             'providerType': providerType ?? 'hospital',
             'description': description ?? '',
-            'isHFRVerified': isHFRVerified ?? false,
-            'isNMCVerified': isNMCVerified ?? false,
+            'isHFRVerified': false, 
+            'isNMCVerified': false, 
             'hfrId': hfrId ?? '',
             'nmcId': nmcId ?? '',
-            'isAvailable': true,
+            'isAvailable': false, 
             'inventory': [], 
+            'certificateUrl': certUrl ?? '',
+            'facilityUrls': facilityUrls,
+            'verificationStatus': 'pending', 
           });
         }
 
@@ -96,7 +115,7 @@ class AuthService {
       }
       return user;
     } on FirebaseAuthException catch (e) {
-      if (user != null) await user.delete(); // Rollback if OTP fails
+      if (user != null) await user.delete(); 
       throw _handleAuthError(e);
     } catch (e) {
       if (user != null) await user.delete();
@@ -104,16 +123,11 @@ class AuthService {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // 📝 STANDARD SIGN UP (Fallback / Direct)
-  // ---------------------------------------------------------------------------
   Future<User?> signUp({
-     // ... (Keep your existing signUp method here just in case you need it later) ...
      required String email, required String password, required String fullName, required String userType,
      required String phone, required String address, required double latitude, required double longitude,
      required String providerType, required String description, String? hfrId, String? nmcId,
   }) async {
-    // Standard creation logic...
     UserCredential result = await _auth.createUserWithEmailAndPassword(email: email, password: password);
     User? user = result.user;
     if (user != null) {
@@ -137,6 +151,22 @@ class AuthService {
   Future<User?> signIn({required String email, required String password}) async {
     final userCredential = await _auth.signInWithEmailAndPassword(email: email, password: password);
     return userCredential.user;
+  }
+
+  // NEW: Login purely with Phone Number OTP
+  Future<User?> signInWithPhone({required String verificationId, required String smsCode}) async {
+    try {
+      PhoneAuthCredential credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: smsCode,
+      );
+      final userCredential = await _auth.signInWithCredential(credential);
+      return userCredential.user;
+    } on FirebaseAuthException catch (e) {
+      throw _handleAuthError(e);
+    } catch (e) {
+      throw 'An unexpected error occurred.';
+    }
   }
 
   Future<void> signOut() async => await _auth.signOut();

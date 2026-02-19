@@ -32,14 +32,35 @@ class DataService {
   static Future<List<EmergencyRequest>> loadRequests() async {
     if (_requests.isEmpty) {
       try {
-        // If you have a requests.json, load that instead
         final String jsonString =
         await rootBundle.loadString('assets/data/requests.json');
         final Map<String, dynamic> jsonData = json.decode(jsonString);
         final List<dynamic> requestsJson = jsonData['requests'];
-        _requests = requestsJson
-            .map((json) => EmergencyRequest.fromJson(json['id'] ?? '', json as Map<String, dynamic>))
-            .toList();
+        
+        // FIXED: Manually map fields to match the updated model
+        _requests = requestsJson.map((json) {
+          final map = json as Map<String, dynamic>;
+          return EmergencyRequest(
+            id: map['id'] ?? '',
+            itemName: map['itemName'] ?? '',
+            itemQuantity: map['itemQuantity'] ?? 1,
+            itemUnit: map['itemUnit'] ?? '',
+            requesterName: map['requesterName'] ?? '',
+            requesterPhone: map['requesterPhone'] ?? '',
+            status: map['status'] ?? 'pending',
+            timestamp: DateTime.now(), // Dummy data timestamp
+            latitude: map['latitude']?.toDouble() ?? 0.0,
+            longitude: map['longitude']?.toDouble() ?? 0.0,
+            locationName: map['locationName'] ?? '',
+            masterRequestId: map['masterRequestId'] ?? '',
+            description: map['description'] ?? '',
+            providerId: '', // FIXED: Cannot be null
+            requesterId: map['requesterId'] ?? '',
+            acceptedAt: DateTime.now(),
+            confirmedProviderId: '',
+            radius: 5.0, // FIXED: Added missing radius field
+          );
+        }).toList();
       } catch (e) {
         print('Error loading requests from JSON, using fallback: $e');
         _requests = _getFallbackRequests();
@@ -121,7 +142,11 @@ class DataService {
         itemName: 'ICU Bed',
         itemQuantity: 1,
         itemUnit: 'beds',
-        providerId: null, acceptedAt: DateTime.now(), confirmedProviderId: '', locationName: '', // not yet accepted
+        locationName: '', 
+        providerId: '', // FIXED: Changed from null to empty string
+        acceptedAt: DateTime.now(), 
+        confirmedProviderId: '', 
+        radius: 5.0, // FIXED: Added missing radius parameter
       ),
     ];
   }
@@ -130,6 +155,7 @@ class DataService {
     _providers.clear();
     _requests.clear();
   }
+
   // Get providers filtered by service type
   static Future<List<Provider>> getProvidersByType(String serviceType) async {
     final allProviders = await loadProviders();
@@ -159,4 +185,3 @@ class DataService {
     }
   }
 }
-

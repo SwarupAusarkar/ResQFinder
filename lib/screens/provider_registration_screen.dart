@@ -1,5 +1,7 @@
+import 'dart:io'; 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/auth_service.dart';
 
 class ProviderRegistrationScreen extends StatefulWidget {
@@ -11,6 +13,7 @@ class ProviderRegistrationScreen extends StatefulWidget {
 class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final AuthService _authService = AuthService();
+  final ImagePicker _picker = ImagePicker(); 
   
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -20,38 +23,69 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
   final _descriptionController = TextEditingController();
   final _latController = TextEditingController();
   final _lonController = TextEditingController();
-  final _hfrController = TextEditingController();
-  final _nmcController = TextEditingController();
 
   String _selectedType = 'hospital';
-  String _verificationMethod = 'HFR'; 
   bool _isLoading = false;
+
+  File? _certificateImage;
+  List<File> _facilityImages = [];
 
   @override
   void dispose() {
     _nameController.dispose(); _emailController.dispose(); _passwordController.dispose();
     _phoneController.dispose(); _addressController.dispose(); _descriptionController.dispose();
-    _latController.dispose(); _lonController.dispose(); _hfrController.dispose(); _nmcController.dispose();
+    _latController.dispose(); _lonController.dispose();
     super.dispose();
   }
 
-  // --- STEP 1: TRIGGER OTP ---
+  // NEW: Smart Formatter
+  String get _formattedPhone {
+    String phone = _phoneController.text.trim();
+    if (phone.isEmpty) return phone;
+    if (phone.startsWith('+')) return phone;
+    phone = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (phone.length == 10) return '+91$phone';
+    if (phone.length == 12 && phone.startsWith('91')) return '+$phone';
+    return '+$phone'; 
+  }
+
+  Future<void> _pickCertificate() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (pickedFile != null) setState(() => _certificateImage = File(pickedFile.path));
+  }
+
+  Future<void> _pickFacilityImages() async {
+    final pickedFiles = await _picker.pickMultiImage(imageQuality: 80);
+    if (pickedFiles.isNotEmpty) {
+      setState(() => _facilityImages.addAll(pickedFiles.map((xfile) => File(xfile.path))));
+    }
+  }
+  
   Future<void> _startRegistrationFlow() async {
     if (!_formKey.currentState!.validate()) return;
+    
     if (_latController.text.isEmpty || _lonController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please capture clinic location first.')));
       return;
     }
+    if (_certificateImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Upload your Facility Certificate to proceed.')));
+      return;
+    }
+    if (_facilityImages.length < 5) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('You must upload at least 5 photos. You have ${_facilityImages.length}.')));
+      return;
+    }
 
     setState(() => _isLoading = true);
-    final phone = _phoneController.text.trim();
+    final phone = _formattedPhone;
 
     try {
       await _authService.startPhoneVerification(
         phoneNumber: phone,
         onCodeSent: (verificationId, resendToken) {
           setState(() => _isLoading = false);
-          _showOtpDialog(verificationId); // Show Dialog when SMS is sent
+          _showOtpDialog(verificationId); 
         },
         onVerificationFailed: (e) {
           setState(() => _isLoading = false);
@@ -64,10 +98,8 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
     }
   }
 
-  // --- STEP 2: SHOW DIALOG ---
   void _showOtpDialog(String verificationId) {
     final otpController = TextEditingController();
-    
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -76,13 +108,9 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text("Enter the 6-digit code sent to ${_phoneController.text}"),
+            Text("Enter the 6-digit code sent to $_formattedPhone"),
             const SizedBox(height: 16),
-            TextField(
-              controller: otpController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: "OTP Code", border: OutlineInputBorder()),
-            ),
+            TextField(controller: otpController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "OTP Code", border: OutlineInputBorder())),
           ],
         ),
         actions: [
@@ -99,10 +127,8 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
     );
   }
 
-  // --- STEP 3: CREATE ACCOUNT ---
   Future<void> _finalizeRegistration(String verificationId, String smsCode) async {
     setState(() => _isLoading = true);
-
     try {
       await _authService.registerWithVerifiedPhone(
         email: _emailController.text.trim(),
@@ -111,21 +137,21 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
         smsCode: smsCode,
         fullName: _nameController.text.trim(),
         userType: 'provider',
-        phone: _phoneController.text.trim(),
+        phone: _formattedPhone,
         address: _addressController.text.trim(),
         latitude: double.parse(_latController.text),
         longitude: double.parse(_lonController.text),
         providerType: _selectedType,
         description: _descriptionController.text.trim(),
-        hfrId: _verificationMethod == 'HFR' ? _hfrController.text.trim() : null,
-        nmcId: _verificationMethod == 'NMC' ? _nmcController.text.trim() : null,
+        hfrId: null, // REMOVED
+        nmcId: null, // REMOVED
         isHFRVerified: false,
         isNMCVerified: false,
+        certificateImage: _certificateImage, 
+        facilityImages: _facilityImages,     
       );
 
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/provider-dashboard');
-      }
+      if (mounted) Navigator.pushReplacementNamed(context, '/provider-dashboard');
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -134,13 +160,10 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
     }
   }
 
-  // ... (Keep your exact build() and _getCurrentLocation() methods from your previous code here) ...
-  // JUST ENSURE the ElevatedButton calls `_startRegistrationFlow` instead of `_register`
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Provider Registration'), backgroundColor: Colors.green),
+      appBar: AppBar(title: const Text('Provider Registration'), backgroundColor: Colors.green, foregroundColor: Colors.white),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Form(
@@ -148,24 +171,49 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildSectionTitle('1. Verification Details'),
+              _buildSectionTitle('1. Document Verification'),
+              const Text("Upload your facility registration certificate.", style: TextStyle(color: Colors.grey, fontSize: 12)),
               const SizedBox(height: 12),
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'HFR', label: Text('HFR (Facility)'), icon: Icon(Icons.local_hospital)),
-                  ButtonSegment(value: 'NMC', label: Text('NMC (Doctor)'), icon: Icon(Icons.person)),
-                ],
-                selected: {_verificationMethod},
-                onSelectionChanged: (val) => setState(() => _verificationMethod = val.first),
+
+              OutlinedButton.icon(
+                onPressed: _pickCertificate,
+                icon: const Icon(Icons.upload_file),
+                label: Text(_certificateImage == null ? 'Upload Certificate Photo *' : 'Certificate Selected'),
+                style: OutlinedButton.styleFrom(foregroundColor: _certificateImage == null ? Colors.red : Colors.green),
               ),
-              const SizedBox(height: 16),
-              if (_verificationMethod == 'HFR')
-                _buildTextField(_hfrController, 'HFR ID', Icons.badge, required: true)
-              else
-                _buildTextField(_nmcController, 'NMC Registration No.', Icons.medical_services, required: true),
 
               const SizedBox(height: 24),
-              _buildSectionTitle('2. Facility Information'),
+              _buildSectionTitle('2. Physical Facility Verification'),
+              const Text("Upload MINIMUM 5 photos showing the exterior, reception, and wards.", style: TextStyle(color: Colors.grey, fontSize: 12)),
+              const SizedBox(height: 12),
+
+              OutlinedButton.icon(
+                onPressed: _pickFacilityImages,
+                icon: const Icon(Icons.add_a_photo),
+                label: const Text('Select Facility Photos (Min 5) *'),
+              ),
+              const SizedBox(height: 8),
+              
+              if (_facilityImages.isNotEmpty)
+                Wrap(
+                  spacing: 8, runSpacing: 8,
+                  children: _facilityImages.map((file) => Stack(
+                    alignment: Alignment.topRight,
+                    children: [
+                      ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(file, width: 70, height: 70, fit: BoxFit.cover)),
+                      GestureDetector(
+                        onTap: () => setState(() => _facilityImages.remove(file)),
+                        child: Container(decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white), child: const Icon(Icons.cancel, color: Colors.red, size: 24)),
+                      )
+                    ],
+                  )).toList(),
+                ),
+              
+              const SizedBox(height: 4),
+              Text('Selected: ${_facilityImages.length}/5 minimum', style: TextStyle(color: _facilityImages.length >= 5 ? Colors.green : Colors.red, fontWeight: FontWeight.bold)),
+
+              const SizedBox(height: 24),
+              _buildSectionTitle('3. Facility Information'),
               const SizedBox(height: 12),
               _buildTextField(_nameController, 'Facility/Provider Name', Icons.business),
               const SizedBox(height: 12),
@@ -176,10 +224,7 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
                 onChanged: (v) => setState(() => _selectedType = v!),
               ),
               const SizedBox(height: 12),
-              
-              // PHONE MUST BE CORRECT FORMAT (+91...)
-              _buildTextField(_phoneController, 'Contact Phone (+91...)', Icons.phone, type: TextInputType.phone),
-              
+              _buildTextField(_phoneController, 'Contact Phone (10 digits)', Icons.phone, type: TextInputType.phone),
               const SizedBox(height: 12),
               _buildTextField(_emailController, 'Official Email', Icons.email, type: TextInputType.emailAddress),
               const SizedBox(height: 12),
@@ -190,17 +235,17 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
               _buildTextField(_descriptionController, 'Services Description', Icons.description, maxLines: 3),
 
               const SizedBox(height: 24),
-              _buildSectionTitle('3. Location'),
+              _buildSectionTitle('4. Location'),
               const SizedBox(height: 12),
               _buildLocationSection(),
 
               const SizedBox(height: 32),
               ElevatedButton(
-                // CALLS THE NEW OTP FLOW
                 onPressed: _isLoading ? null : _startRegistrationFlow, 
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 16)),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16)),
                 child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('VERIFY PHONE & REGISTER'),
               ),
+              const SizedBox(height: 32), 
             ],
           ),
         ),
@@ -208,7 +253,6 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
     );
   }
 
-  // Keep these helper methods from your previous code
   Widget _buildLocationSection() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -217,9 +261,8 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
         children: [
           ElevatedButton.icon(
             onPressed: _getCurrentLocation,
-            icon: const Icon(Icons.gps_fixed),
-            label: const Text('Capture Current Location'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            icon: const Icon(Icons.gps_fixed), label: const Text('Capture Current Location'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
           ),
           const SizedBox(height: 12),
           Row(
