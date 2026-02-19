@@ -195,13 +195,13 @@ class _MapScreenState extends State<MapScreen> {
   Color _getServiceColor() {
     switch (_serviceType.toLowerCase()) {
       case 'hospital':
-        return Colors.red;
+        return Color(0xFF00897B);
       case 'police':
-        return Colors.blue;
+        return Color(0xFF00897B);
       case 'ambulance':
-        return Colors.orange;
+        return Color(0xFF00897B);
       default:
-        return Colors.grey;
+        return Color(0xFF00897B);
     }
   }
 

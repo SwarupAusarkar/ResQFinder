@@ -356,8 +356,8 @@
 // lib/screens/provider_registration_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-import '../services/auth_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ProviderRegistrationScreen extends StatefulWidget {
   const ProviderRegistrationScreen({super.key});
@@ -368,149 +368,110 @@ class ProviderRegistrationScreen extends StatefulWidget {
 
 class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  // Controllers for general info
   final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _addressController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _latController = TextEditingController();
-  final _lonController = TextEditingController();
 
-  // NEW: Verification Controllers
-  final _hfrController = TextEditingController();
-  final _nmcController = TextEditingController();
+  // CRITICAL: Controllers for Double Verification
+  final _nmcIdController = TextEditingController(); // National Medical Commission
+  final _hfrIdController = TextEditingController(); // Health Facility Registry
 
-  String _selectedType = 'hospital';
-  String _verificationMethod = 'HFR'; // Default toggle
   bool _isLoading = false;
-  bool _obscurePassword = true;
+  bool _isAvailableInitial = true; // Default status for new providers
 
-  @override
-  void dispose() {
-    _hfrController.dispose();
-    _nmcController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _register() async {
+  Future<void> _registerProvider() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
-
     try {
-      await AuthService().signUp(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-        fullName: _nameController.text.trim(),
-        userType: 'provider',
-        phone: _phoneController.text.trim(),
-        address: _addressController.text.trim(),
-        latitude: double.parse(_latController.text),
-        longitude: double.parse(_lonController.text),
-        providerType: _selectedType,
-        description: _descriptionController.text.trim(),
-        // Pass these to your AuthService to save in Firestore
-        hfrId: _hfrController.text.trim(),
-        nmcId: _nmcController.text.trim(),
-        isHFRVerified: false,
-        isNMCVerified: false,
-      );
+      final User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw "No authenticated user found";
+
+      // Prepare the user document with verification flags
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'uid': user.uid,
+        'fullName': _nameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'role': 'provider',
+
+        // Verification Fields
+        'nmcId': _nmcIdController.text.trim(),
+        'hfrId': _hfrIdController.text.trim(),
+        'isNMCVerified': false, // Admin must verify manually
+        'isHFRVerified': false, // Admin must verify manually
+
+        // Availability Toggle Field
+        'isAvailable': _isAvailableInitial,
+
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       if (mounted) {
-        // Redirect to a 'Waiting for Verification' screen instead of dashboard
-        Navigator.pushReplacementNamed(context, '/verification-pending');
+        // Navigate to the Verification Guard we discussed earlier
+        Navigator.pushReplacementNamed(context, '/provider_guard');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Registration failed: $e'), backgroundColor: Colors.red),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Registration Error: $e"), backgroundColor: Colors.red),
+      );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Provider Registration'), backgroundColor: Colors.green),
+      appBar: AppBar(title: const Text("Provider Registration"), backgroundColor:Color(0xFF00897B) , foregroundColor: Colors.white),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24.0),
         child: Form(
           key: _formKey,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Professional Verification',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
-              const SizedBox(height: 12),
+              const Text("Professional Details", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
 
-              // TOGGLE for HFR vs NMC
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'HFR', label: Text('Facility (HFR)'), icon: Icon(Icons.local_hospital)),
-                  ButtonSegment(value: 'NMC', label: Text('Doctor (NMC)'), icon: Icon(Icons.person)),
-                ],
-                selected: {_verificationMethod},
-                onSelectionChanged: (val) => setState(() => _verificationMethod = val.first),
-              ),
-              const SizedBox(height: 16),
-
-              if (_verificationMethod == 'HFR')
-                TextFormField(
-                  controller: _hfrController,
-                  decoration: InputDecoration(
-                    labelText: 'HFR ID (Facility Registry) *',
-                    hintText: 'Enter Facility Registry Number',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    prefixIcon: const Icon(Icons.badge),
-                  ),
-                  validator: (v) => v!.isEmpty ? 'Facility ID required for verification' : null,
-                )
-              else
-                TextFormField(
-                  controller: _nmcController,
-                  decoration: InputDecoration(
-                    labelText: 'NMC ID (Lead Doctor Registry) *',
-                    hintText: 'Enter Doctor Registration Number',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    prefixIcon: const Icon(Icons.medical_services),
-                  ),
-                  validator: (v) => v!.isEmpty ? 'Medical ID required for verification' : null,
-                ),
+              _buildTextField(_nameController, "Full Name", Icons.person, "Enter your name"),
+              _buildTextField(_phoneController, "Phone Number", Icons.phone, "Enter contact number", isPhone: true),
 
               const Divider(height: 40),
+              const Text("Medical Verification (Required)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color:Color(0xFF00897B))),
+              const SizedBox(height: 15),
 
-              // Standard Fields (Name, Email, etc.)
-              TextFormField(
-                controller: _nameController,
-                decoration: InputDecoration(
-                  labelText: 'Provider Name *',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                validator: (v) => v!.isEmpty ? 'Required' : null,
+              // NMC Field
+              _buildTextField(_nmcIdController, "NMC ID (Doctor Reg No.)", Icons.badge, "e.g. NMC/12345/2023"),
+
+              // HFR Field
+              _buildTextField(_hfrIdController, "HFR ID (Facility Reg No.)", Icons.local_hospital, "e.g. HFR/FAC/999"),
+
+              const SizedBox(height: 20),
+
+              // Initial Availability Toggle
+              SwitchListTile(
+                title: const Text("Set Status to Available immediately?"),
+                subtitle: const Text("You can change this later from your dashboard"),
+                value: _isAvailableInitial,
+                activeColor: const Color(0xFF00897B),
+                onChanged: (val) => setState(() => _isAvailableInitial = val),
               ),
-              const SizedBox(height: 16),
 
-              // ... Include the rest of your controllers (Email, Phone, Address) here ...
-
-              // Location Capture
-              _buildLocationSection(),
-
-              const SizedBox(height: 32),
-
-              ElevatedButton(
-                onPressed: _isLoading ? null : _register,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _registerProvider,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00897B),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text("COMPLETE REGISTRATION", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
-                child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Register & Submit for Verification'),
               ),
             ],
           ),
@@ -519,30 +480,20 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
     );
   }
 
-  Widget _buildLocationSection() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        children: [
-          ElevatedButton.icon(
-            onPressed: _getCurrentLocation,
-            icon: const Icon(Icons.gps_fixed),
-            label: const Text('Capture Clinic Location'),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: TextFormField(controller: _latController, decoration: const InputDecoration(labelText: 'Lat'))),
-              const SizedBox(width: 8),
-              Expanded(child: TextFormField(controller: _lonController, decoration: const InputDecoration(labelText: 'Lon'))),
-            ],
-          ),
-        ],
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon, String hint, {bool isPhone = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: isPhone ? TextInputType.phone : TextInputType.text,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          prefixIcon: Icon(icon, color: const Color(0xFF00897B)),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        validator: (value) => value!.isEmpty ? "Required field" : null,
       ),
     );
   }
-
-  // Your existing _getCurrentLocation logic...
-  Future<void> _getCurrentLocation() async { /* ... Same as your previous code ... */ }
 }

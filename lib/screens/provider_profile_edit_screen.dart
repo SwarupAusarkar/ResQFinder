@@ -75,7 +75,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Location updated!'),
-            backgroundColor: Colors.green,
+            backgroundColor: Color(0xFF00897B),
           ),
         );
       }
@@ -146,7 +146,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit Profile'),
-        backgroundColor: Colors.green,
+        backgroundColor: Color(0xFF00897B),
         foregroundColor: Colors.white,
       ),
       body: _isLoading
@@ -224,13 +224,13 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.my_location, color: Colors.blue[700]),
+                              Icon(Icons.my_location, color: Color(0xFF00897B)),
                               const SizedBox(width: 8),
                               Text(
                                 'Location',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.blue[700],
+                                  color: Color(0xFF00897B),
                                 ),
                               ),
                             ],
@@ -240,7 +240,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
                             onPressed: _isSaving ? null : _updateLocation,icon: const Icon(Icons.gps_fixed),
                             label: const Text('Update Current Location'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
+                              backgroundColor: Color(0xFF00897B),
                               foregroundColor: Colors.white,
                               minimumSize: const Size(double.infinity, 45),
                             ),
@@ -283,7 +283,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
                     ElevatedButton(
                       onPressed: _isSaving ? null : _saveProfile,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: Color(0xFF00897B),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
@@ -291,7 +291,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
                         ),
                       ),
                       child: _isSaving
-                          ? const CircularProgressIndicator(color: Colors.white)
+                          ? const CircularProgressIndicator(color: Colors.black)
                           : const Text('Save Changes', style: TextStyle(fontSize: 16)),
                     ),
                   ],

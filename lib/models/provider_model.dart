@@ -150,13 +150,13 @@ class Provider {
   final String description;
   final List<InventoryItem> inventory;
   final int noOfApprovedRequests;
-
+  final String? fcmToken;
   // Verification Fields
   final String? hfrId;
   final String? nmcId;
   final bool isHFRVerified;
   final bool isNMCVerified;
-
+  final String verificationType;
   Provider({
     required this.id,
     required this.name,
@@ -175,6 +175,8 @@ class Provider {
     this.nmcId,
     this.isHFRVerified = false,
     this.isNMCVerified = false,
+    required this.verificationType,
+    required this.fcmToken,
   });
 
   factory Provider.fromJson(String id, Map<String, dynamic> json) {
@@ -190,15 +192,19 @@ class Provider {
       isAvailable: json['isAvailable'] ?? true,
       rating: (json['rating'] as num?)?.toInt() ?? 0,
       description: json['description'] ?? '',
-      inventory: (json['inventory'] as List<dynamic>? ?? [])
-          .map((item) => InventoryItem.fromMap(item as Map<String, dynamic>))
-          .toList(),
+      inventory:
+          (json['inventory'] as List<dynamic>? ?? [])
+              .map(
+                (item) => InventoryItem.fromMap(item as Map<String, dynamic>),
+              )
+              .toList(),
       noOfApprovedRequests: json['noOfApprovedRequests'] ?? 0,
-      // Verification Mapping
+      fcmToken: json['fcmToken'] ?? '',
       hfrId: json['hfrId'],
       nmcId: json['nmcId'],
       isHFRVerified: json['isHFRVerified'] ?? false,
       isNMCVerified: json['isNMCVerified'] ?? false,
+      verificationType: 'json["verificationType"]',
     );
   }
 
@@ -223,6 +229,7 @@ class Provider {
       'isNMCVerified': isNMCVerified,
     };
   }
+
   String get iconPath {
     switch (type.toLowerCase()) {
       case 'hospital':
@@ -235,6 +242,7 @@ class Provider {
         return '📍';
     }
   }
+
   Provider copyWith({
     double? distance,
     bool? isAvailable,
@@ -254,7 +262,10 @@ class Provider {
       description: this.description,
       inventory: inventory ?? this.inventory,
       noOfApprovedRequests: 0,
+      verificationType: this.verificationType,
+      fcmToken: this.fcmToken,
     );
   }
+
   bool get isFullyVerified => isHFRVerified || isNMCVerified;
 }

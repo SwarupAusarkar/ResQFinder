@@ -14,11 +14,12 @@ class HomeScreen extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF1976D2), // Blue
-              Color(0xFF4CAF50), // Green
-            ],
+              Color(0xFF00897B), // Teal Green (theme color)
+              Color(0xFF4DB6AC), // Lighter teal accent
+                          ],
           ),
         ),
+
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
@@ -147,7 +148,7 @@ class HomeScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: userType == 'requester' 
+                  color: userType == 'requester'
                       ? Colors.blue.withOpacity(0.1)
                       : Colors.green.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),

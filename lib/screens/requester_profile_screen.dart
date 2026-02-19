@@ -130,7 +130,7 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Medical ID & Profile"), backgroundColor: Colors.redAccent, actions: [IconButton(onPressed: _saveProfile, icon: const Icon(Icons.check))]),
+      appBar: AppBar(title: const Text("Medical ID & Profile"), backgroundColor: Color(0xFF00897B), actions: [IconButton(onPressed: _saveProfile, icon: const Icon(Icons.check))]),
       body: Form(
         key: _formKey,
         child: ListView(

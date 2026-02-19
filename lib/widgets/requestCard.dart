@@ -275,9 +275,31 @@ class RequestCard extends StatelessWidget {
     );
   }
 
-  Widget _buildTimestamp(DateTime ts) {
+  Widget _buildTimestamp(DateTime reqDate) {
+    final now = DateTime.now();
+
+    // Check if same day
+    final bool isToday = reqDate.year == now.year &&
+        reqDate.month == now.month &&
+        reqDate.day == now.day;
+
+    // Check if yesterday
+    final yesterday = now.subtract(const Duration(days: 1));
+    final bool isYesterday = reqDate.year == yesterday.year &&
+        reqDate.month == yesterday.month &&
+        reqDate.day == yesterday.day;
+
+    String dateLabel;
+    if (isToday) {
+      dateLabel = DateFormat('hh:mm a').format(reqDate);
+    } else if (isYesterday) {
+      dateLabel = 'Yesterday, ${DateFormat('hh:mm a').format(reqDate)}';
+    } else {
+      dateLabel = DateFormat('MMM dd, hh:mm a').format(reqDate);
+    }
+
     return Text(
-      DateFormat('hh:mm a').format(ts),
+      dateLabel,
       style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
     );
   }

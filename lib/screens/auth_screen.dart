@@ -280,6 +280,7 @@
 //       ),
 //     );
 //   } }
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -350,26 +351,29 @@ class _AuthScreenState extends State<AuthScreen> {
         }
       } else {
         // REGISTER: Create user with unverified status but allow entry
-        final user = await _authService.signUp(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-          fullName: _nameController.text.trim(),
-          userType: userType,
-          isHFRVerified: userType == "provider" ? false : null,
-          isNMCVerified: userType == 'provider' ? false : null,
-          hfrId: userType == 'provider' ? _hfrController.text.trim() : null,
-          nmcId: userType == 'provider' ? _nmcController.text.trim() : null,
-          phone: '',
-          address: '',
-          latitude: 0.0,
-          longitude: 0.0,
-          providerType: '',
-          description: '',
-        );
+        FirebaseMessaging messaging=FirebaseMessaging.instance;
+        String? token=await messaging.getToken();
+          final user = await _authService.signUp(
+            email: _emailController.text.trim(),
+            password: _passwordController.text.trim(),
+            fullName: _nameController.text.trim(),
+            userType: userType,
+            isHFRVerified: userType == "provider" ? false : null,
+            isNMCVerified: userType == 'provider' ? false : null,
+            hfrId: userType == 'provider' ? _hfrController.text.trim() : null,
+            nmcId: userType == 'provider' ? _nmcController.text.trim() : null,
+            phone: '',
+            address: '',
+            latitude: 0.0,
+            longitude: 0.0,
+            providerType: '',
+            description: '',
+            fcmToken: token,
+          );
 
         if (user != null && mounted) {
           if (userType == 'provider') {
-            // New providers go to MANAGE SERVICES after signup as requested
+            // Nw providers go to MANAGE SERVICES after signup as requested
             Navigator.pushReplacementNamed(context, '/manage-services');
           } else {
             Navigator.pushReplacementNamed(context, '/service-selection');
@@ -379,7 +383,7 @@ class _AuthScreenState extends State<AuthScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+          SnackBar(content: Text(e.toString()), backgroundColor:Color(0xFF00897B)),
         );
       }
     } finally {
@@ -390,14 +394,14 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final userType = args?['userType'] ?? 'requester';
     final isProvider = userType == 'provider';
 
     return Scaffold(
       appBar: AppBar(
         title: Text(isProvider ? 'Medical Provider Portal' : 'Citizen Sign In'),
-        backgroundColor: isProvider ? Colors.green : Colors.blue,
+        backgroundColor: Color(0xFF00897B),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -449,7 +453,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   "Professional Credentials",
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Colors.green,
+                    color: Color(0xFF00897B),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -470,15 +474,15 @@ class _AuthScreenState extends State<AuthScreen> {
               ElevatedButton(
                 onPressed: _isLoading ? null : () => _submitForm(userType),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isProvider ? Colors.green : Colors.blue,
+                  backgroundColor: Color(0xFF00897B),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
                 child:
-                    _isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : Text(
-                          _isLoginMode ? 'SIGN IN' : 'REGISTER AS PROVIDER',
-                        ),
+                _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : Text(
+                  _isLoginMode ? 'SIGN IN' : 'REGISTER AS PROVIDER',
+                ),
               ),
 
               TextButton(
@@ -497,12 +501,12 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Widget _buildTextField(
-    TextEditingController controller,
-    String label,
-    IconData icon, {
-    bool isPassword = false,
-    TextInputType? keyboardType,
-  }) {
+      TextEditingController controller,
+      String label,
+      IconData icon, {
+        bool isPassword = false,
+        TextInputType? keyboardType,
+      }) {
     return TextFormField(
       controller: controller,
       obscureText: isPassword && _obscurePassword,
@@ -511,16 +515,16 @@ class _AuthScreenState extends State<AuthScreen> {
         labelText: label,
         prefixIcon: Icon(icon),
         suffixIcon:
-            isPassword
-                ? IconButton(
-                  icon: Icon(
-                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                  ),
-                  onPressed:
-                      () =>
-                          setState(() => _obscurePassword = !_obscurePassword),
-                )
-                : null,
+        isPassword
+            ? IconButton(
+          icon: Icon(
+            _obscurePassword ? Icons.visibility_off : Icons.visibility,
+          ),
+          onPressed:
+              () =>
+              setState(() => _obscurePassword = !_obscurePassword),
+        )
+            : null,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
       validator:
