@@ -26,7 +26,7 @@ class _ManageInventoryScreenState extends State<ManageInventoryScreen> {
       if (user == null) throw Exception("User not logged in.");
       await _firestore.collection('users').doc(user.uid).update({'inventory': newInventory});
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inventory updated!'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inventory updated!'), backgroundColor: Color(0xFF00897B)));
       }
     } catch (e) {
       if (mounted) {
@@ -109,7 +109,7 @@ class _ManageInventoryScreenState extends State<ManageInventoryScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Manage Inventory'),
-        backgroundColor: Colors.green,
+        backgroundColor: Color(0xFF00897B),
         foregroundColor: Colors.white,
       ),
       body: StreamBuilder<DocumentSnapshot>(
@@ -165,7 +165,7 @@ class _ManageInventoryScreenState extends State<ManageInventoryScreen> {
                         ),
                         Text(item.quantity.toString(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                         IconButton(
-                          icon: const Icon(Icons.add_circle, color: Colors.green),
+                          icon: const Icon(Icons.add_circle, color: Color(0xFF00897B)),
                           onPressed: _isSubmitting ? null : () => _updateQuantity(item, 1, inventory),
                         ),
                         IconButton(
@@ -199,9 +199,9 @@ class _ManageInventoryScreenState extends State<ManageInventoryScreen> {
             }
           });
         },
-        backgroundColor: Colors.green,
+        backgroundColor: Color(0xFF00897B),
         tooltip: 'Add New Item',
-        child: _isSubmitting ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.add, color: Colors.white),
+        child: _isSubmitting ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.add, color: Colors.black),
       ),
     );
   }

@@ -92,7 +92,9 @@ android {
 dependencies {
     // ✅ Updated to required version
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-
+    implementation platform('com.google.firebase:firebase-bom:32.7.0')
+    implementation 'com.google.firebase:firebase-messaging'
+    implementation 'com.google.firebase:firebase-analytics'
     // Let Flutter Firebase plugins handle their own Android dependencies
 }
 

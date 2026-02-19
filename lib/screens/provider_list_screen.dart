@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:emergency_res_loc_new/screens/OfferApprovalScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -93,7 +95,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     });
   }
 
- Future<void> _performSearch(String query) async {
+  Future<void> _performSearch(String query) async {
     if (!mounted) return;
 
     setState(() {
@@ -334,7 +336,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
             onPressed: (){Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => ApprovalScreen()
+                  builder: (context) => ApprovalScreen()
               ),
             );
             },
@@ -377,28 +379,25 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
         ],
       ),
       floatingActionButton: _filteredProviders.isNotEmpty
-          ? FloatingActionButton.extended(
-        onPressed:() {
-      Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => SendRequestScreen(
-          inventoryItem: InventoryItem(
-            name: 'Select Item',
-            quantity: 0,
-            unit: 'Units',
-            lastUpdated: DateTime.now(),
-          ),
-        ),
-      ),
-    );
-  },
+          ? FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => SendRequestScreen(
+                inventoryItem: InventoryItem(
+                  name: 'Select Item',
+                  quantity: 0,
+                  unit: 'Units',
+                  lastUpdated: DateTime.now(),
+                ),
+              ),
+            ),
+          );
+        },
         backgroundColor: _getServiceColor(),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'New  Request',
-          style: TextStyle(color: Colors.white),
-        ),
+        // Circular shape is the default for FloatingActionButton
+        child: const Icon(Icons.add, color: Colors.white, size: 28),
       )
           : null,
     );
@@ -508,7 +507,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     );
   }
 
- Widget _buildInfoBar() {
+  Widget _buildInfoBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       color: _getServiceColor().withOpacity(0.1),
@@ -548,7 +547,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
                     'Available',
                     style: TextStyle(fontSize: 10),
                   ),
-                  backgroundColor: Colors.green.withOpacity(0.2),
+                  backgroundColor: Color(0xFF00897B).withOpacity(0.2),
                   deleteIcon: const Icon(Icons.close, size: 14),
                   onDeleted: () {
                     setState(() => _showAvailableOnly = false);
@@ -564,7 +563,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
                   '${_selectedRadius ~/ 1000}km',
                   style: const TextStyle(fontSize: 10),
                 ),
-                backgroundColor: Colors.blue.withOpacity(0.1),
+                backgroundColor: Color(0xFF00897B).withOpacity(0.1),
                 deleteIcon: const Icon(Icons.close, size: 14),
                 onDeleted: () {
                   setState(() => _selectedRadius = 50000);
@@ -752,6 +751,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
       case 'hospital':
         return 'Hospitals';
       case 'police':
+      case 'police':
         return 'Police Stations';
       case 'ambulance':
         return 'Ambulance Services';
@@ -763,13 +763,13 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
   Color _getServiceColor() {
     switch (_serviceType.toLowerCase()) {
       case 'hospital':
-        return Colors.red;
+        return Color(0xFF00897B);
       case 'police':
-        return Colors.blue;
+        return Color(0xFF00897B);
       case 'ambulance':
-        return Colors.orange;
+        return Color(0xFF00897B);
       default:
-        return Colors.blue;
+        return Color(0xFF00897B);
     }
   }
 
@@ -801,11 +801,11 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
 
   void _showErrorSnackBar(String message) {
     if (!mounted)
-    return;
+      return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red,
+        backgroundColor: Color(0xFF00897B),
         action: SnackBarAction(
           label: 'Retry',
           textColor: Colors.white,

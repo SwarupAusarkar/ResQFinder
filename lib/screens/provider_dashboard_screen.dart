@@ -4,7 +4,12 @@ import '../models/RequestOffer.dart' show RequestOffer;
 import '../models/request_model.dart';
 import '../services/auth_service.dart';
 import '../widgets/requestCard.dart';
+import 'manage_inventory_screen.dart';
 import 'provider_profile_edit_screen.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import '../services/NotificationHelper.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import '../services/NotificationHelper.dart';
 
 class ProviderDashboardScreen extends StatefulWidget {
   const ProviderDashboardScreen({super.key});
@@ -19,6 +24,100 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
   String _selectedFilter = 'new';
   String _selectedTimeFilter = 'all';
   bool _isProcessing = false;
+
+  //notification
+  final NotificationService _notificationService = NotificationService();
+  String? _highlightedRequestId;
+
+  //helper functions
+  @override
+  void initState() {
+    super.initState();
+    _initializeNotifications();
+  }
+
+  Future<void> _initializeNotifications() async {
+    // Initialize FCM
+    await _notificationService.initialize();
+
+    // Handle notification tap (when app is in background/terminated)
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      _handleNotificationTap(message);
+    });
+
+    // Check if app was opened from a notification
+    FirebaseMessaging.instance.getInitialMessage().then((message) {
+      if (message != null) {
+        _handleNotificationTap(message);
+      }
+    });
+
+    // Handle foreground notifications
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      // Show banner notification
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.emergency, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        message.notification?.title ?? 'New Emergency',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Text(
+                        message.notification?.body ?? '',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF00897B),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'VIEW',
+              textColor: Colors.white,
+              onPressed: () {
+                _handleNotificationTap(message);
+              },
+            ),
+          ),
+        );
+      }
+    });
+  }
+
+  void _handleNotificationTap(RemoteMessage message) {
+    final requestId = message.data['requestId'];
+
+    if (requestId != null && mounted) {
+      setState(() {
+        _selectedFilter = 'new';  // Switch to new requests tab
+        _highlightedRequestId = requestId;  // Highlight this request
+      });
+
+      // Clear highlight after 3 seconds
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) {
+          setState(() {
+            _highlightedRequestId = null;
+          });
+        }
+      });
+    }
+  }
+
 
   Future<void> _acceptRequest(EmergencyRequest request) async {
     if (_isProcessing) return;
@@ -62,7 +161,7 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Offer Sent! Waiting for citizen approval."), backgroundColor: Colors.green),
+          const SnackBar(content: Text("Offer Sent! Waiting for citizen approval."), backgroundColor: Color(0xFF00897B)),
         );
         setState(() => _selectedFilter = 'my_offers');
       }
@@ -261,21 +360,22 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
     }
   }
 
-   @override
+  @override
   Widget build(BuildContext context) {
     final user = _authService.currentUser;
     if (user == null) return const Scaffold(body: Center(child: Text("Login Required")));
 
     return Scaffold(
-        appBar: AppBar(
+      appBar: AppBar(
         title: const Text('Provider Dashboard'),
-        backgroundColor: Colors.green,
+        backgroundColor: Color(0xFF00897B),
         actions: [
           IconButton(icon: const Icon(Icons.edit), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProviderProfileEditScreen()))),
           IconButton(icon: const Icon(Icons.logout), onPressed: () => _authService.signOut()),
+          IconButton(icon:const Icon(Icons.inventory),onPressed: ()=>Navigator.push(context, MaterialPageRoute(builder: (context) => const ManageInventoryScreen())),)
         ],
       ),
-    body: Column(
+      body: Column(
         children: [
           _buildFilterTabs(),
           if (_isProcessing) const LinearProgressIndicator(color: Colors.green),
@@ -321,7 +421,25 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
                     final bool isWinner = req.status == 'confirmed' &&
                         (req.confirmedProviderId == userId || req.confirmedProviderId == userId);
 
-                    return RequestCard(
+                    return AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: _highlightedRequestId == req.id
+                    ? Border.all(color: const Color(0xFF00897B), width: 3)
+                        : null,
+                    boxShadow: _highlightedRequestId == req.id
+                    ? [
+                    BoxShadow(
+                    color: const Color(0xFF00897B).withOpacity(0.3),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                    )
+                    ]
+                        : null,
+                    ),
+                     child:RequestCard(
                       request: req,
                       onAccept: (!hasOffered && req.status == 'pending') ? () => _acceptRequest(req) : null,
                       onDecline: hasOffered ? null : () => _firestore.collection('emergency_requests').doc(req.id).update({
@@ -347,7 +465,7 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
                           );
                         }
                       },
-                    );
+                    ));
                   },
                 );
               },
@@ -384,9 +502,9 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
           setState(() => _selectedFilter = value);
         }
       },
-      selectedColor: Colors.green.withOpacity(0.2),
+      selectedColor: Color(0xFF00897B).withOpacity(0.2),
       labelStyle: TextStyle(
-        color: _selectedFilter == value ? Colors.green : Colors.grey[700],
+        color: _selectedFilter == value ? Color(0xFF00897B) : Colors.black,
         fontWeight:
         _selectedFilter == value ? FontWeight.bold : FontWeight.normal,
       ),

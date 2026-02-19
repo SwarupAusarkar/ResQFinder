@@ -91,7 +91,7 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
       await FirebaseFirestore.instance.collection('emergency_requests').add({
         'masterRequestId': const Uuid().v4(),
         'requesterId': user.uid,
-        'requesterName': userData['name'] ?? 'Anonymous',
+        'requesterName': userData['fullName'] ?? 'Anonymous',
         'requesterPhone': userData['phone'] ?? 'N/A',
         'latitude': lat,
         'longitude': long,
@@ -105,7 +105,10 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
         'radius': _searchRadius,
         'declinedBy': [], // For personal provider-side filtering
         'acceptedAt': null, // Placeholder for the 5-min timer logic
-        'verificationCode': null, // Placeholder for the Zomato-style OTP
+        'verificationCode': null,
+        'acceptedBy': '',
+        'offers':[],
+        'confirmedProviderId': '',
       });
 
       if (mounted) {
@@ -131,11 +134,27 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New Emergency Request'),
-        backgroundColor: Colors.redAccent,
-        foregroundColor: Colors.white,
+        title: const Text(
+          'Create New Request',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () {},
+          ),
+          CircleAvatar(
+            radius: 16,
+            backgroundImage: const NetworkImage('https://via.placeholder.com/150'),
+            backgroundColor: Colors.grey[300],
+          ),
+          const SizedBox(width: 12),
+        ],
       ),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Form(
@@ -143,6 +162,54 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Add after line 136 (after appBar, inside body's Column)
+
+              const SizedBox(height: 16),
+              _buildSectionTitle("Emergency Type"),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _buildEmergencyTypeChip(
+                    icon: Icons.local_hospital,
+                    label: 'Medical',
+                    color: const Color(0xFF00897B),
+                    isSelected: true, // You can add state management if needed
+                  ),
+                  _buildEmergencyTypeChip(
+                    icon: Icons.local_fire_department,
+                    label: 'Fire',
+                    color: Colors.orange,
+                    isSelected: false,
+                  ),
+                  _buildEmergencyTypeChip(
+                    icon: Icons.car_crash,
+                    label: 'Accident',
+                    color: Colors.red,
+                    isSelected: false,
+                  ),
+                  _buildEmergencyTypeChip(
+                    icon: Icons.security,
+                    label: 'Security',
+                    color: Colors.blue,
+                    isSelected: false,
+                  ),
+                  _buildEmergencyTypeChip(
+                    icon: Icons.help_outline,
+                    label: 'Rescue',
+                    color: Colors.purple,
+                    isSelected: false,
+                  ),
+                  _buildEmergencyTypeChip(
+                    icon: Icons.more_horiz,
+                    label: 'Other',
+                    color: Colors.grey,
+                    isSelected: false,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
               _buildSectionTitle("What resource is needed?"),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
@@ -212,7 +279,7 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
                 max: 10.0,
                 divisions: 19,
                 label: "${_searchRadius.toStringAsFixed(1)} km",
-                activeColor: Colors.redAccent,
+                activeColor: const Color(0xFF00897B),
                 onChanged: (v) => setState(() => _searchRadius = v),
               ),
 
@@ -268,7 +335,7 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+        borderSide: const BorderSide(color: Color(0xFF00897B), width: 2),
       ),
     );
   }
@@ -298,7 +365,7 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
       child: ElevatedButton(
         onPressed: _isSending ? null : _sendBroadcastRequest,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.redAccent,
+          backgroundColor: const Color(0xFF00897B),
           padding: const EdgeInsets.symmetric(vertical: 18),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -325,7 +392,58 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
       ),
     );
   }
-
+  Widget _buildEmergencyTypeChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required bool isSelected,
+  }) {
+    return InkWell(
+      onTap: () {
+        // Add state management here if needed
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? color : Colors.white,
+          border: Border.all(
+            color: isSelected ? color : Colors.grey[300]!,
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: isSelected
+              ? [
+            BoxShadow(
+              color: color.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            )
+          ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? Colors.white : color,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.black87,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
   void _showSnackBar(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

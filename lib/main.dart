@@ -1,5 +1,7 @@
 import 'package:emergency_res_loc_new/models/inventory_item_model.dart';
 import 'package:emergency_res_loc_new/models/provider_model.dart';
+import 'package:emergency_res_loc_new/screens/provider_registration_screen.dart';
+import 'package:emergency_res_loc_new/screens/requester_registeration.dart';
 import 'package:emergency_res_loc_new/services/FCMService.dart';
 import 'package:emergency_res_loc_new/services/location_service.dart';
 import 'package:flutter/material.dart';
@@ -29,10 +31,6 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-    //
-    // // Initialize Notifications
-    // await FCMService.initialize();
     print("✓ Firebase initialized");
 
     // Request location permissions on startup (non-blocking)
@@ -142,10 +140,12 @@ class EmergencyResourceLocatorApp extends StatelessWidget {
         '/': (context) => const AuthWrapper(),
         '/home': (context) => const HomeScreen(),
         '/auth': (context) => const AuthScreen(),
+        '/provider-registration': (context) => ProviderRegistrationScreen(),
         '/service-selection': (context) => const ServiceSelectionScreen(),
         '/provider-list': (context) => const ProviderListScreen(),
         '/provider-details': (context) => const ProviderDetailsScreen(),
         '/map': (context) => const MapScreen(),
+        '/citizen-registration': (context) => const CitizenRegisterScreen(),
         '/provider-dashboard': (context) => ProviderDashboardScreen(),
         '/manage-services': (context) => const ManageServicesScreen(),
         '/manage-inventory': (context) => const ManageInventoryScreen(),

@@ -35,6 +35,18 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
+	<key>UIBackgroundModes</key>
+    <array>
+        <string>fetch</string>
+        <string>remote-notification</string>
+    </array>
+
+    <key>FirebaseAppDelegateProxyEnabled</key>
+    <true/>
+
+    <key>NSUserNotificationUsageDescription</key>
+    <string>This app uses notifications to alert you about updates.</string>
+
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
