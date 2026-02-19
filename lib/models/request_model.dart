@@ -1,5 +1,3 @@
-import 'dart:core';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:emergency_res_loc_new/models/RequestOffer.dart';
 
@@ -17,11 +15,13 @@ class EmergencyRequest {
   final String locationName;
   final String masterRequestId;
   final String description;
-  final List<String> declinedBy; // Default to empty list
+  final List<String> declinedBy;
   final DateTime acceptedAt;
   final String confirmedProviderId;
   final List<RequestOffer> offers;
   final String? verificationCode;
+  final double radius; // <--- NEW FIELD
+
   EmergencyRequest({
     required this.id,
     required this.itemName,
@@ -36,46 +36,22 @@ class EmergencyRequest {
     required this.masterRequestId,
     required this.description,
     this.declinedBy = const [],
-    required providerId,
+    required String providerId,
     required String requesterId,
     required this.requesterPhone,
     required this.acceptedAt,
     required this.confirmedProviderId,
     this.offers = const [],
     this.verificationCode,
+    this.radius = 5.0, // Default radius
   });
-  factory EmergencyRequest.fromJson(String id, Map<String, dynamic> data) {
-    return EmergencyRequest(
-      id: id,
-      masterRequestId: data['masterRequestId'] ?? '',
-      requesterId: data['requesterId'] ?? '',
-      requesterName: data['requesterName'] ?? '',
-      providerId: data['providerId'],
-      description: data['description'] ?? '',
-      timestamp:
-          (data['timestamp'] is DateTime)
-              ? data['timestamp']
-              : DateTime.tryParse(data['timestamp'] ?? '') ?? DateTime.now(),
-      status: data['status'] ?? 'pending',
-      requesterPhone: data['requesterPhone'] ?? '',
-      latitude: (data['latitude'] as num?)?.toDouble() ?? 0.0,
-      longitude: (data['longitude'] as num?)?.toDouble() ?? 0.0,
-      itemName: data['itemName'] ?? '',
-      itemQuantity: (data['itemQuantity'] as num?)?.toInt() ?? 0,
-      itemUnit: data['itemUnit'] ?? '',
-      acceptedAt: DateTime.now(),
-      confirmedProviderId: '',
-      declinedBy: [],
-      locationName: '',
-      offers: [],
-    );
-  } // Default to empty list}
+
   factory EmergencyRequest.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return EmergencyRequest(
       id: doc.id,
       itemName: data['itemName'] ?? '',
-      itemQuantity: data['itemQuantity'] ?? 0,
+      itemQuantity: (data['itemQuantity'] as num?)?.toInt() ?? 0,
       itemUnit: data['itemUnit'] ?? '',
       requesterName: data['requesterName'] ?? '',
       status: data['status'] ?? 'pending',
@@ -86,25 +62,20 @@ class EmergencyRequest {
       masterRequestId: data['masterRequestId'] ?? '',
       description: data['description'] ?? '',
       declinedBy: List<String>.from(data['declinedBy'] ?? []),
-      providerId: null,
+      providerId: '',
       requesterPhone: data['requesterPhone'] ?? '',
-      requesterId: '',
+      requesterId: data['requesterId'] ?? '',
       acceptedAt: (data['timestamp'] as Timestamp).toDate(),
       confirmedProviderId: '',
-      offers:
-          (data['offers'] as List? ?? [])
+      offers: (data['offers'] as List? ?? [])
               .map((o) => RequestOffer.fromMap(o as Map<String, dynamic>))
               .toList(),
       verificationCode: data['verificationCode'],
+      radius: (data['radius'] as num?)?.toDouble() ?? 5.0, // <--- READ IT HERE
     );
   }
-  /// Check if a specific provider has already offered
+
   bool hasProviderOffered(String providerId) {
     return offers.any((offer) => offer.providerId == providerId);
-  }
-
-  /// Get the number of waiting offers
-  int get waitingOffersCount {
-    return offers.where((offer) => offer.status == 'waiting').length;
   }
 }

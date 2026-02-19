@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -10,10 +9,9 @@ class AuthService {
   User? get currentUser => _auth.currentUser;
 
   // ---------------------------------------------------------------------------
-  // 🚀 REGISTRATION FLOW (OTP Only for Verification)
+  // 📞 PHONE OTP + REGISTRATION FLOW
   // ---------------------------------------------------------------------------
 
-  // Step 1: Trigger the SMS Code
   Future<void> startPhoneVerification({
     required String phoneNumber,
     required Function(String verificationId, int? resendToken) onCodeSent,
@@ -21,18 +19,14 @@ class AuthService {
   }) async {
     await _auth.verifyPhoneNumber(
       phoneNumber: phoneNumber,
-      verificationCompleted: (PhoneAuthCredential credential) {
-        // Auto-resolution (mostly Android). 
-        // We generally handle this in the UI or ignore to force manual code entry for consistency.
-      },
+      verificationCompleted: (_) {}, // Handled manually via UI
       verificationFailed: onVerificationFailed,
       codeSent: onCodeSent,
-      codeAutoRetrievalTimeout: (String verificationId) {},
+      codeAutoRetrievalTimeout: (_) {},
       timeout: const Duration(seconds: 60),
     );
   }
 
-  // Step 2: Finalize Account Creation (Email + Pass + Verified Phone)
   Future<User?> registerWithVerifiedPhone({
     required String email,
     required String password,
@@ -54,7 +48,7 @@ class AuthService {
   }) async {
     User? user;
     try {
-      // A. Create the Basic Email/Password Account
+      // 1. Create Basic Account
       UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
@@ -62,38 +56,47 @@ class AuthService {
       user = userCredential.user;
 
       if (user != null) {
-        // B. Link the Phone Credential to this Account
-        // This proves the phone number belongs to this email user
+        // 2. Link Phone to Account
         PhoneAuthCredential credential = PhoneAuthProvider.credential(
           verificationId: verificationId,
           smsCode: smsCode,
         );
-        
         await user.linkWithCredential(credential);
 
-        // C. Save Data to Firestore
-        await saveUserData(
-          user: user,
-          fullName: fullName,
-          userType: userType,
-          email: email,
-          phone: phone, // This is now verified
-          address: address,
-          latitude: latitude,
-          longitude: longitude,
-          providerType: providerType,
-          description: description,
-          isHFRVerified: isHFRVerified,
-          isNMCVerified: isNMCVerified,
-          hfrId: hfrId,
-          nmcId: nmcId,
-        );
+        // 3. Save Data to Firestore (Providers or Requesters)
+        String collectionPath = (userType == 'provider') ? 'providers' : 'requesters';
+        
+        final Map<String, dynamic> userData = {
+          'uid': user.uid,
+          'email': email,
+          'name': fullName,
+          'userType': userType,
+          'phone': phone, // Verified!
+          'createdAt': FieldValue.serverTimestamp(),
+          'profileComplete': true,
+        };
+
+        if (userType == 'provider') {
+          userData.addAll({
+            'address': address ?? '',
+            'latitude': latitude ?? 0.0,
+            'longitude': longitude ?? 0.0,
+            'providerType': providerType ?? 'hospital',
+            'description': description ?? '',
+            'isHFRVerified': isHFRVerified ?? false,
+            'isNMCVerified': isNMCVerified ?? false,
+            'hfrId': hfrId ?? '',
+            'nmcId': nmcId ?? '',
+            'isAvailable': true,
+            'inventory': [], 
+          });
+        }
+
+        await _firestore.collection(collectionPath).doc(user.uid).set(userData);
       }
       return user;
     } on FirebaseAuthException catch (e) {
-      // Rollback: If linking fails (e.g., invalid code), delete the half-created email user
-      // so they can try again.
-      if (user != null) await user.delete();
+      if (user != null) await user.delete(); // Rollback if OTP fails
       throw _handleAuthError(e);
     } catch (e) {
       if (user != null) await user.delete();
@@ -102,100 +105,52 @@ class AuthService {
   }
 
   // ---------------------------------------------------------------------------
-  // 🔑 LOGIN FLOW (Standard Email/Password)
+  // 📝 STANDARD SIGN UP (Fallback / Direct)
   // ---------------------------------------------------------------------------
-
-  Future<User?> signIn({
-    required String email,
-    required String password,
+  Future<User?> signUp({
+     // ... (Keep your existing signUp method here just in case you need it later) ...
+     required String email, required String password, required String fullName, required String userType,
+     required String phone, required String address, required double latitude, required double longitude,
+     required String providerType, required String description, String? hfrId, String? nmcId,
   }) async {
-    try {
-      final userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      return userCredential.user;
-    } on FirebaseAuthException catch (e) {
-      throw _handleAuthError(e);
-    } catch (e) {
-      throw 'An unexpected error occurred.';
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // 💾 SHARED HELPERS
-  // ---------------------------------------------------------------------------
-
-  Future<void> saveUserData({
-    required User user,
-    required String fullName,
-    required String userType,
-    String? email,
-    String? phone,
-    String? address,
-    double? latitude,
-    double? longitude,
-    String? providerType,
-    String? description,
-    bool? isHFRVerified,
-    bool? isNMCVerified,
-    String? hfrId,
-    String? nmcId,
-  }) async {
-    String collectionPath = (userType == 'provider') ? 'providers' : 'requesters';
-
-    final Map<String, dynamic> userData = {
-      'uid': user.uid,
-      'name': fullName,
-      'userType': userType,
-      'createdAt': FieldValue.serverTimestamp(),
-      'profileComplete': true,
-      if (email != null) 'email': email,
-      if (phone != null) 'phone': phone,
-    };
-
-    if (userType == 'provider') {
-      userData.addAll({
-        'isHFRVerified': isHFRVerified ?? false,
-        'isNMCVerified': isNMCVerified ?? false,
-        'hfrId': hfrId ?? '',
-        'nmcId': nmcId ?? '',
-        'address': address ?? '',
-        'latitude': latitude ?? 0.0,
-        'longitude': longitude ?? 0.0,
-        'providerType': providerType ?? 'hospital',
-        'description': description ?? '',
-        'isAvailable': true,
-        'inventory': [],
+    // Standard creation logic...
+    UserCredential result = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+    User? user = result.user;
+    if (user != null) {
+      String collectionPath = (userType == 'provider') ? 'providers' : 'requesters';
+      await _firestore.collection(collectionPath).doc(user.uid).set({
+        'uid': user.uid, 'email': email, 'name': fullName, 'userType': userType, 'phone': phone,
+        'createdAt': FieldValue.serverTimestamp(), 'profileComplete': true,
+        if (userType == 'provider') ...{
+          'address': address, 'latitude': latitude, 'longitude': longitude, 'providerType': providerType,
+          'description': description, 'isHFRVerified': false, 'isNMCVerified': false, 'hfrId': hfrId ?? '',
+          'nmcId': nmcId ?? '', 'isAvailable': true, 'inventory': [], 
+        }
       });
     }
-
-    await _firestore.collection(collectionPath).doc(user.uid).set(userData, SetOptions(merge: true));
+    return user;
   }
 
-  Future<DocumentSnapshot?> getUserData(String uid) async {
-    try {
-      var doc = await _firestore.collection('requesters').doc(uid).get();
-      if (doc.exists) return doc;
-      doc = await _firestore.collection('providers').doc(uid).get();
-      if (doc.exists) return doc;
-      return null;
-    } catch (e) {
-      return null;
-    }
+  // ---------------------------------------------------------------------------
+  // 🔑 LOGIN & HELPERS
+  // ---------------------------------------------------------------------------
+  Future<User?> signIn({required String email, required String password}) async {
+    final userCredential = await _auth.signInWithEmailAndPassword(email: email, password: password);
+    return userCredential.user;
   }
 
   Future<void> signOut() async => await _auth.signOut();
 
+  Future<DocumentSnapshot?> getUserData(String uid) async {
+    var doc = await _firestore.collection('requesters').doc(uid).get();
+    if (doc.exists) return doc;
+    doc = await _firestore.collection('providers').doc(uid).get();
+    if (doc.exists) return doc;
+    return null;
+  }
+
   String _handleAuthError(FirebaseAuthException error) {
-    switch (error.code) {
-      case 'email-already-in-use': return 'Email already in use.';
-      case 'credential-already-in-use': return 'This phone number is already linked to another account.';
-      case 'invalid-verification-code': return 'The SMS code is invalid.';
-      case 'weak-password': return 'Password is too weak.';
-      case 'user-not-found': return 'No user found with this email.';
-      case 'wrong-password': return 'Incorrect password.';
-      default: return error.message ?? 'Authentication error';
-    }
+    if (error.code == 'invalid-verification-code') return 'The SMS code is invalid.';
+    return error.message ?? 'An error occurred';
   }
 }
