@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/auth_service.dart'; // Import AuthService
 import '../screens/home_screen.dart';
 import '../screens/auth_screen.dart';
 import '../screens/service_selection_screen.dart';
@@ -12,125 +13,92 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AuthService authService = AuthService();
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        print("🔍 AuthWrapper - Connection state: ${snapshot.connectionState}");
-        print("🔍 AuthWrapper - Has data: ${snapshot.hasData}");
-        print("🔍 AuthWrapper - User: ${snapshot.data?.email}");
         
-        // Show loading indicator while checking auth state
+        // 1. Show loading while checking Firebase Auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
         
-        // If user is logged in, determine their role and route accordingly
+        // 2. If User is Logged In -> Fetch Role Data
         if (snapshot.hasData && snapshot.data != null) {
-          return FutureBuilder<DocumentSnapshot>(
-            future: FirebaseFirestore.instance
-                .collection('users')
-                .doc(snapshot.data!.uid)
-                .get(),
-            builder: (context, userDoc) {
-              print("🔍 User doc - Connection state: ${userDoc.connectionState}");
-              print("🔍 User doc - Has data: ${userDoc.hasData}");
+          return FutureBuilder<DocumentSnapshot?>(
+            // USE THE SERVICE TO CHECK BOTH COLLECTIONS
+            future: authService.getUserData(snapshot.data!.uid),
+            builder: (context, userDocSnapshot) {
               
-              if (userDoc.connectionState == ConnectionState.waiting) {
-                return const Scaffold(
-                  body: Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                );
+              if (userDocSnapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(body: Center(child: CircularProgressIndicator()));
               }
 
-              if (userDoc.hasError) {
-                print("❌ Error loading user data: ${userDoc.error}");
-                return Scaffold(
-                  body: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.error, size: 64, color: Colors.red),
-                        const SizedBox(height: 16),
-                        Text('Error: ${userDoc.error}'),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () async {
-                            await FirebaseAuth.instance.signOut();
-                          },
-                          child: const Text('Sign Out'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
+              if (userDocSnapshot.hasError) {
+                return _buildErrorScreen("Error loading profile: ${userDocSnapshot.error}");
               }
 
-              if (!userDoc.hasData || !userDoc.data!.exists) {
-                print("⚠️ User document doesn't exist");
-                return Scaffold(
-                  body: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.warning, size: 64, color: Colors.orange),
-                        const SizedBox(height: 16),
-                        const Text('User data not found'),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () async {
-                            await FirebaseAuth.instance.signOut();
-                          },
-                          child: const Text('Sign Out and Try Again'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
+              // Handle case where user exists in Auth but not in Firestore (e.g. deleted manually)
+              if (!userDocSnapshot.hasData || userDocSnapshot.data == null || !userDocSnapshot.data!.exists) {
+                return _buildErrorScreen("User profile not found in database.");
               }
 
-              final userData = userDoc.data!.data() as Map<String, dynamic>?;
+              final userData = userDocSnapshot.data!.data() as Map<String, dynamic>?;
               
               if (userData == null) {
-                print("⚠️ User data is null");
-                return const Scaffold(
-                  body: Center(
-                    child: Text('Error loading user data'),
-                  ),
-                );
+                return _buildErrorScreen("User data is corrupted.");
               }
 
               final userType = userData['userType'] as String?;
-              print("✓ User type: $userType");
 
-              // Route based on user type
+              // 3. Routing Logic
               if (userType == 'provider') {
+                // Providers: Check if they have finished setup
+                // (Note: In our new flow, we set profileComplete = true on signup, 
+                // but checking here makes it robust for future edits)
                 final profileComplete = userData['profileComplete'] as bool? ?? false;
-                print("✓ Provider profile complete: $profileComplete");
                 
                 if (!profileComplete) {
-                  // New provider needs to set up services
                   return const ManageServicesScreen();
                 }
-                // Existing provider goes to dashboard
                 return ProviderDashboardScreen();
               } else {
-                // Requester goes to service selection
-                print("✓ Routing to ServiceSelectionScreen");
+                // Requesters: Go to Service Selection
                 return const ServiceSelectionScreen();
               }
             },
           );
         }
         
-        // If user is not logged in, show home screen (which leads to auth)
-        print("ℹ️ No user logged in, showing HomeScreen");
+        // 3. If User is Not Logged In -> Show Home (Landing)
         return const HomeScreen();
       },
+    );
+  }
+
+  Widget _buildErrorScreen(String message) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 16),
+              Text(message, textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () async {
+                  await FirebaseAuth.instance.signOut();
+                },
+                child: const Text('Sign Out & Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

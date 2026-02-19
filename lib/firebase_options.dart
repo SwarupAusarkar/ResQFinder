@@ -83,4 +83,5 @@ class DefaultFirebaseOptions {
     authDomain: 'emergency-resource-finde-c88c5.firebaseapp.com',
     storageBucket: 'emergency-resource-finde-c88c5.firebasestorage.app',
   );
+
 }
