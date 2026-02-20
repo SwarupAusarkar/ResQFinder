@@ -1,10 +1,9 @@
-// lib/screens/manage_inventory_screen.dart
-
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/inventory_item_model.dart';
 import '../services/auth_service.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'add_inventory_item_screen.dart'; // Import the new screen
+import 'add_inventory_item_screen.dart';
+import 'package:intl/intl.dart'; // For date formatting
 
 class ManageInventoryScreen extends StatefulWidget {
   const ManageInventoryScreen({super.key});
@@ -18,26 +17,49 @@ class _ManageInventoryScreenState extends State<ManageInventoryScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   bool _isSubmitting = false;
 
+  // FORMATTER: For the "Last Updated" text
+  String _formatDateTime(DateTime dateTime) {
+    return DateFormat('dd MMM, hh:mm a').format(dateTime);
+  }
+
+  // CORE LOGIC: Update inventory in the 'providers' collection
   Future<void> _updateInventory(List<Map<String, dynamic>> newInventory) async {
     if (_isSubmitting) return;
     setState(() => _isSubmitting = true);
+
     try {
       final user = _authService.currentUser;
       if (user == null) throw Exception("User not logged in.");
-      await _firestore.collection('users').doc(user.uid).update({'inventory': newInventory});
+
+      // Fixed: Using 'providers' collection as per upstream fix
+      await _firestore
+          .collection('providers')
+          .doc(user.uid)
+          .update({'inventory': newInventory});
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inventory updated!'), backgroundColor: Color(0xFF00897B)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Inventory updated!'),
+            backgroundColor: Color(0xFF00897B),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red),
+        );
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
-  Future<void> _updateQuantity(InventoryItem item, int change, List<InventoryItem> currentInventory) async {
+  // HELPER: Change quantity + or -
+  Future<void> _updateQuantity(
+      InventoryItem item, int change, List<InventoryItem> currentInventory) async {
     final newQuantity = item.quantity + change;
     if (newQuantity < 0) return;
 
@@ -53,124 +75,104 @@ class _ManageInventoryScreenState extends State<ManageInventoryScreen> {
     }
   }
 
-  void _showEditDialog({required InventoryItem item, required List<InventoryItem> currentInventory}) {
-    final quantityController = TextEditingController(text: item.quantity.toString());
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Edit: ${item.name}'),
-          content: TextField(
-            controller: quantityController,
-            decoration: InputDecoration(labelText: 'Quantity', hintText: 'Enter new quantity'),
-            keyboardType: TextInputType.number,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                final updatedInventory = currentInventory.where((i) => i.name != item.name).toList();
-                await _updateInventory(updatedInventory.map((i) => i.toMap()).toList());
-              },
-              child: const Text('Delete Item', style: TextStyle(color: Colors.red)),
-            ),
-            const Spacer(),
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () async {
-                final index = currentInventory.indexWhere((i) => i.name == item.name);
-                if (index != -1) {
-                  currentInventory[index] = InventoryItem(
-                    name: item.name,
-                    quantity: int.tryParse(quantityController.text) ?? item.quantity,
-                    unit: item.unit,
-                    lastUpdated: DateTime.now(),
-                  );
-                  Navigator.pop(context);
-                  await _updateInventory(currentInventory.map((i) => i.toMap()).toList());
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
+  // HELPER: Delete item
+  Future<void> _removeItem(int index, List<InventoryItem> currentInventory) async {
+    currentInventory.removeAt(index);
+    await _updateInventory(currentInventory.map((i) => i.toMap()).toList());
   }
 
   @override
   Widget build(BuildContext context) {
     final user = _authService.currentUser;
-    if (user == null) {
-      return const Scaffold(body: Center(child: Text("User not found.")));
-    }
+    if (user == null) return const Scaffold(body: Center(child: Text("Login required")));
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Manage Inventory'),
-        backgroundColor: Color(0xFF00897B),
+        backgroundColor: const Color(0xFF00897B),
         foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: _firestore.collection('users').doc(user.uid).snapshots(),
+        // Listen to 'providers' collection
+        stream: _firestore.collection('providers').doc(user.uid).snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.data?.data() == null) {
-            return const Center(child: Text("No provider data found."));
+            return const Center(child: CircularProgressIndicator(color: Color(0xFF00897B)));
           }
 
-          final data = snapshot.data!.data() as Map<String, dynamic>;
-          final inventory = (data['inventory'] as List<dynamic>? ?? [])
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return const Center(child: Text("No inventory data found."));
+          }
+
+          final data = snapshot.data!.data() as Map<String, dynamic>?;
+          final inventory = (data?['inventory'] as List<dynamic>? ?? [])
               .map((item) => InventoryItem.fromMap(item as Map<String, dynamic>))
               .toList();
-          
+
           inventory.sort((a, b) => a.name.compareTo(b.name));
 
           if (inventory.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24.0),
-                child: Text(
-                  'Your inventory is empty.\nTap the "+" button to add items from the master list.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
-                ),
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey[300]),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00897B)),
+                    icon: const Icon(Icons.add, color: Colors.white),
+                    label: const Text("Add Your First Item", style: TextStyle(color: Colors.white)),
+                    onPressed: () => _navigateToAdd(inventory),
+                  ),
+                ],
               ),
             );
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.only(bottom: 80),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
             itemCount: inventory.length,
             itemBuilder: (context, index) {
               final item = inventory[index];
               return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                elevation: 3,
+                margin: const EdgeInsets.only(bottom: 12),
+                elevation: 2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  padding: const EdgeInsets.all(8.0),
                   child: ListTile(
-                    title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    subtitle: Text('Unit: ${item.unit}\nLast updated: ${_formatDateTime(item.lastUpdated)}'),
+                    title: Text(item.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${item.quantity} ${item.unit}'),
+                        Text(
+                          'Updated: ${_formatDateTime(item.lastUpdated)}',
+                          style: const TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                      ],
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.remove_circle, color: Colors.red),
+                          icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
                           onPressed: _isSubmitting ? null : () => _updateQuantity(item, -1, inventory),
                         ),
-                        Text(item.quantity.toString(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        IconButton(
-                          icon: const Icon(Icons.add_circle, color: Color(0xFF00897B)),
-                          onPressed: _isSubmitting ? null : () => _updateQuantity(item, 1, inventory),
+                        Text(
+                          item.quantity.toString(),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                         IconButton(
-                          icon: Icon(Icons.edit, color: Colors.grey[600]),
-                          onPressed: _isSubmitting ? null : () => _showEditDialog(item: item, currentInventory: inventory),
+                          icon: const Icon(Icons.add_circle_outline, color: Color(0xFF00897B)),
+                          onPressed: _isSubmitting ? null : () => _updateQuantity(item, 1, inventory),
+                        ),
+                        const VerticalDivider(width: 10),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.grey),
+                          onPressed: _isSubmitting ? null : () => _removeItem(index, inventory),
                         ),
                       ],
                     ),
@@ -182,31 +184,28 @@ class _ManageInventoryScreenState extends State<ManageInventoryScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF00897B),
+        tooltip: 'Add New Item',
         onPressed: () {
-          // Fetch the latest inventory and navigate to the add screen
-          _firestore.collection('users').doc(user.uid).get().then((doc) {
-            if (doc.exists) {
-              final data = doc.data() as Map<String, dynamic>;
-              final currentInventory = (data['inventory'] as List<dynamic>? ?? [])
-                  .map((item) => InventoryItem.fromMap(item as Map<String, dynamic>))
-                  .toList();
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AddInventoryItemScreen(currentInventory: currentInventory),
-                ),
-              );
-            }
+          _firestore.collection('providers').doc(user.uid).get().then((doc) {
+            final data = doc.data() as Map<String, dynamic>? ?? {};
+            final currentInv = (data['inventory'] as List? ?? [])
+                .map((e) => InventoryItem.fromMap(e))
+                .toList();
+            _navigateToAdd(currentInv);
           });
         },
-        backgroundColor: Color(0xFF00897B),
-        tooltip: 'Add New Item',
-        child: _isSubmitting ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.add, color: Colors.black),
+        child: _isSubmitting
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
-  
-  String _formatDateTime(DateTime dt) {
-    return "${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}";
+
+  void _navigateToAdd(List<InventoryItem> current) {
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => AddInventoryItemScreen(currentInventory: current)));
   }
 }

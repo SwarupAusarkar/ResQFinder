@@ -1,14 +1,14 @@
 import 'package:emergency_res_loc_new/models/inventory_item_model.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:uuid/uuid.dart';
-import '../data/master_inventory_list.dart'; // Ensure this contains the masterInventory list
+import '../data/master_inventory_list.dart';
 import '../services/auth_service.dart';
 import '../services/location_service.dart';
 
 class SendRequestScreen extends StatefulWidget {
-  const SendRequestScreen({super.key, required InventoryItem inventoryItem});
+  final InventoryItem? inventoryItem;
+  const SendRequestScreen({super.key, this.inventoryItem});
 
   @override
   State<SendRequestScreen> createState() => _SendRequestScreenState();
@@ -18,35 +18,55 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
   final _formKey = GlobalKey<FormState>();
   final _quantityController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final AuthService _authService = AuthService();
 
   String? _selectedItem;
   String? _selectedUnit;
-  double _searchRadius = 1.5;
+  double _searchRadius = 5.0;
   bool _isSending = false;
   double lat = 0.0, long = 0.0;
-  String loc="";
+  String loc = "";
+
   @override
   void initState() {
     super.initState();
     _initLocation();
+
+    // Null-safe pre-fill if navigating from inventory
+    if (widget.inventoryItem != null) {
+      _selectedItem = widget.inventoryItem?.name;
+      _selectedUnit = widget.inventoryItem?.unit;
+    }
+  }
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
   }
 
   Future<void> _initLocation() async {
-    // Attempt to get location immediately
     final pos = await LocationService.getCurrentLocation();
     if (pos != null && mounted) {
       setState(() {
         lat = pos.latitude;
         long = pos.longitude;
-      });  print(lat);print(long);
-      loc = await LocationService.getAddressFromLatLng(lat, long); print(loc);
+      });
+
+      final address = await LocationService.getAddressFromLatLng(lat, long);
+      if (mounted && address != null) {
+        setState(() => loc = address);
+      }
     }
   }
 
   void _onResourceChanged(String? newValue) {
     if (newValue == null) return;
-      final foundItem = masterInventoryList.firstWhere(
-      (item) => item.name == newValue,
+
+    // Find unit from master list based on name
+    final foundItem = masterInventoryList.firstWhere(
+          (item) => item.name == newValue,
       orElse: () => const MasterInventoryItem(name: '', unit: 'Units'),
     );
 
@@ -57,18 +77,21 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
   }
 
   Future<void> _sendBroadcastRequest() async {
-    // 1. Basic Validation
-    if (!_formKey.currentState!.validate() || _selectedItem == null) return;
+    // 1. Logic Guard: Ensure resource is selected
+    if (_selectedItem == null) {
+      _showSnackBar("Please select a resource type", Colors.orange);
+      return;
+    }
 
-    // 2. Safety Check: Location check
+    // 2. Logic Guard: Form validation
+    if (!_formKey.currentState!.validate()) return;
+
+    // 3. Logic Guard: Location check
     if (lat == 0.0) {
-      // Try one last time to get location before failing
       await _initLocation();
+      if (!mounted) return;
       if (lat == 0.0) {
-        _showSnackBar(
-          "Getting location... please ensure GPS is on.",
-          Colors.orange,
-        );
+        _showSnackBar("GPS Location required for SOS", Colors.red);
         return;
       }
     }
@@ -76,55 +99,46 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
     setState(() => _isSending = true);
 
     try {
-      final user = AuthService().currentUser;
-      if (user == null) throw Exception("User session expired.");
+      final user = _authService.currentUser;
+      if (user == null) throw "User session expired. Please log in.";
 
-      // Fetch requester profile for the latest contact info
-      final userDoc =
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get();
-      final userData = userDoc.data() ?? {};
+      // 4. Data Guard: Safely fetch user data across collections
+      final userDoc = await _authService.getUserData(user.uid);
+      if (!mounted) return;
 
-      // 3. Create the Handshake/Broadcast document
+      final Map<String, dynamic> userData = userDoc?.data() as Map<String, dynamic>? ?? {};
+      final String requesterName = userData['fullName'] ?? userData['name'] ?? 'Anonymous';
+      final String requesterPhone = userData['phone'] ?? 'N/A';
+
+      // 5. Build and Push Payload
       await FirebaseFirestore.instance.collection('emergency_requests').add({
         'masterRequestId': const Uuid().v4(),
         'requesterId': user.uid,
-        'requesterName': userData['fullName'] ?? 'Anonymous',
-        'requesterPhone': userData['phone'] ?? 'N/A',
+        'requesterName': requesterName,
+        'requesterPhone': requesterPhone,
         'latitude': lat,
         'longitude': long,
         'locationName': loc,
         'itemName': _selectedItem,
-        'itemQuantity': int.parse(_quantityController.text),
-        'itemUnit': _selectedUnit,
+        'itemQuantity': int.tryParse(_quantityController.text) ?? 1,
+        'itemUnit': _selectedUnit ?? 'Units',
         'description': _descriptionController.text.trim(),
         'status': 'pending',
         'timestamp': FieldValue.serverTimestamp(),
         'radius': _searchRadius,
-        'declinedBy': [], // For personal provider-side filtering
-        'acceptedAt': null, // Placeholder for the 5-min timer logic
+        'declinedBy': [],
+        'acceptedAt': null,
         'verificationCode': null,
-        'acceptedBy': '',
-        'offers':[],
+        'offers': [],
         'confirmedProviderId': '',
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Emergency broadcast active! Nearby providers notified.',
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        _showSnackBar("Emergency Alert Broadcasted!", const Color(0xFF00897B));
         Navigator.pop(context);
       }
     } catch (e) {
-      _showSnackBar("Broadcast Failed: $e", Colors.red);
+      if (mounted) _showSnackBar("Failed: $e", Colors.red);
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -133,28 +147,18 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          'Create New Request',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
+        title: const Text('Create Emergency Request',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87)),
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {},
-          ),
-          CircleAvatar(
-            radius: 16,
-            backgroundImage: const NetworkImage('https://via.placeholder.com/150'),
-            backgroundColor: Colors.grey[300],
-          ),
-          const SizedBox(width: 12),
-        ],
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Form(
@@ -162,144 +166,66 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Add after line 136 (after appBar, inside body's Column)
-
-              const SizedBox(height: 16),
               _buildSectionTitle("Emergency Type"),
               const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _buildEmergencyTypeChip(
-                    icon: Icons.local_hospital,
-                    label: 'Medical',
-                    color: const Color(0xFF00897B),
-                    isSelected: true, // You can add state management if needed
-                  ),
-                  _buildEmergencyTypeChip(
-                    icon: Icons.local_fire_department,
-                    label: 'Fire',
-                    color: Colors.orange,
-                    isSelected: false,
-                  ),
-                  _buildEmergencyTypeChip(
-                    icon: Icons.car_crash,
-                    label: 'Accident',
-                    color: Colors.red,
-                    isSelected: false,
-                  ),
-                  _buildEmergencyTypeChip(
-                    icon: Icons.security,
-                    label: 'Security',
-                    color: Colors.blue,
-                    isSelected: false,
-                  ),
-                  _buildEmergencyTypeChip(
-                    icon: Icons.help_outline,
-                    label: 'Rescue',
-                    color: Colors.purple,
-                    isSelected: false,
-                  ),
-                  _buildEmergencyTypeChip(
-                    icon: Icons.more_horiz,
-                    label: 'Other',
-                    color: Colors.grey,
-                    isSelected: false,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              _buildSectionTitle("What resource is needed?"),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                value: _selectedItem,
+              _buildTypeChips(),
+              const SizedBox(height: 28),
 
-                items:
-                    masterInventoryList
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item.name,
-                            child: Text(item.name),
-                          ),
-                        )
-                        .toList(),
+              _buildSectionTitle("Resource Details"),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                // FIX: Ensure _selectedItem actually exists in the list to prevent the crash
+                value: (masterInventoryList.any((e) => e.name == _selectedItem))
+                    ? _selectedItem
+                    : null,
+                isExpanded: true,
+                decoration: _inputDecoration("Select Resource"),
+
+                // FIX: Use .toSet() before .toList() if you have duplicate names in your master list
+                items: masterInventoryList
+                    .map((e) => e.name)
+                    .toSet() // This removes duplicates automatically
+                    .map((name) => DropdownMenuItem(
+                  value: name,
+                  child: Text(name),
+                ))
+                    .toList(),
+
                 onChanged: _onResourceChanged,
-                decoration: _inputDecoration("Select Resource Type"),
                 validator: (v) => v == null ? "Please select an item" : null,
               ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _quantityController,
+                keyboardType: TextInputType.number,
+                decoration: _inputDecoration("Quantity (${_selectedUnit ?? 'Units'})"),
+                validator: (v) => (v == null || v.isEmpty) ? "Required" : null,
+              ),
+              const SizedBox(height: 28),
 
-              const SizedBox(height: 24),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    flex: 3,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSectionTitle("Quantity"),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: _quantityController,
-                          keyboardType: TextInputType.number,
-                          decoration: _inputDecoration("Number"),
-                          validator: (v) {
-                            if (v == null || v.isEmpty) return "Required";
-                            if (int.tryParse(v) == null) return "Invalid";
-                            return null;
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSectionTitle("Unit"),
-                        const SizedBox(height: 8),
-                        _buildReadOnlyField(_selectedUnit ?? "---"),
-                      ],
-                    ),
-                  ),
+                  _buildSectionTitle("Search Radius"),
+                  Text("${_searchRadius.toStringAsFixed(1)} km",
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF00897B))),
                 ],
               ),
-
-              const SizedBox(height: 24),
-              _buildSectionTitle(
-                "Search Radius: ${_searchRadius.toStringAsFixed(1)} km",
-              ),
               Slider(
-                value: _searchRadius,
-                min: 0.5,
-                max: 10.0,
-                divisions: 19,
-                label: "${_searchRadius.toStringAsFixed(1)} km",
+                value: _searchRadius, min: 1, max: 20, divisions: 19,
                 activeColor: const Color(0xFF00897B),
+                inactiveColor: Colors.teal.withOpacity(0.1),
                 onChanged: (v) => setState(() => _searchRadius = v),
               ),
+              const SizedBox(height: 20),
 
-              const SizedBox(height: 24),
-              _buildSectionTitle("Emergency Details"),
-              const SizedBox(height: 8),
+              _buildSectionTitle("Medical Notes / Urgency"),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _descriptionController,
                 maxLines: 3,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: _inputDecoration(
-                  "e.g. Critical condition, blood group, etc.",
-                ),
-                validator:
-                    (v) =>
-                        (v == null || v.isEmpty)
-                            ? "Description is helpful for providers"
-                            : null,
+                decoration: _inputDecoration("Enter specific details or address clues..."),
               ),
-
               const SizedBox(height: 40),
               _buildSubmitButton(),
             ],
@@ -309,15 +235,59 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontWeight: FontWeight.bold,
-        fontSize: 13,
-        color: Colors.black54,
+  // --- UI Component Helper Methods ---
+
+  Widget _buildTypeChips() {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        _buildEmergencyTypeChip(Icons.local_hospital, 'Medical', const Color(0xFF00897B), true),
+        _buildEmergencyTypeChip(Icons.local_fire_department, 'Fire', Colors.orange, false),
+        _buildEmergencyTypeChip(Icons.car_crash, 'Accident', Colors.red, false),
+        _buildEmergencyTypeChip(Icons.security, 'Security', Colors.blue, false),
+      ],
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return Container(
+      width: double.infinity,
+      height: 60,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(colors: [Color(0xFF00897B), Color(0xFF00796B)]),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00897B).withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: _isSending ? null : _sendBroadcastRequest,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        child: _isSending
+            ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            : const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.podcasts, color: Colors.white),
+            SizedBox(width: 12),
+            Text("BROADCAST SOS", style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black87));
   }
 
   InputDecoration _inputDecoration(String hint) {
@@ -325,132 +295,42 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
       hintText: hint,
       filled: true,
       fillColor: Colors.grey[50],
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF00897B), width: 2),
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey[200]!)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey[200]!)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF00897B), width: 1.5)),
     );
   }
 
-  Widget _buildReadOnlyField(String text) {
+  Widget _buildEmergencyTypeChip(IconData icon, String label, Color color, bool isSelected) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.grey[200],
+        color: isSelected ? color.withOpacity(0.1) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
+        border: Border.all(color: isSelected ? color : Colors.grey[200]!, width: 1.5),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: Colors.black87,
-          fontWeight: FontWeight.bold,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: isSelected ? color : Colors.grey),
+          const SizedBox(width: 8),
+          Text(label, style: TextStyle(color: isSelected ? color : Colors.grey, fontWeight: FontWeight.w600, fontSize: 13)),
+        ],
       ),
     );
   }
 
-  Widget _buildSubmitButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: _isSending ? null : _sendBroadcastRequest,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF00897B),
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        child:
-            _isSending
-                ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-                : const Text(
-                  "SEND REQUEST",
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-      ),
-    );
-  }
-  Widget _buildEmergencyTypeChip({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required bool isSelected,
-  }) {
-    return InkWell(
-      onTap: () {
-        // Add state management here if needed
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? color : Colors.white,
-          border: Border.all(
-            color: isSelected ? color : Colors.grey[300]!,
-            width: 1.5,
-          ),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: isSelected
-              ? [
-            BoxShadow(
-              color: color.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            )
-          ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? Colors.white : color,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.black87,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
   void _showSnackBar(String msg, Color color) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-      ),
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        )
     );
   }
 }

@@ -24,7 +24,7 @@ plugins {
     id("com.google.gms.google-services") version "4.3.15" apply false
     // END: FlutterFire Configuration
 
-    // ✅ Your preferred Kotlin version
+    // ✅ Kotlin plugin version
     id("org.jetbrains.kotlin.android") version "2.1.0" apply false
 }
 

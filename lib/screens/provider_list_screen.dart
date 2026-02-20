@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:emergency_res_loc_new/screens/OfferApprovalScreen.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
@@ -798,7 +799,135 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
         return sortBy;
     }
   }
-
+  // void _handleRequesterNotificationTap(RemoteMessage message) {
+  //   final type = message.data['type'];
+  //
+  //   if (!mounted) return;
+  //
+  //   switch (type) {
+  //     case 'offer_received':
+  //     // Navigate to offer approval screen
+  //       Navigator.pushNamed(context, '/offer-approval');
+  //
+  //       // Show snackbar with offer count
+  //       final offerCount = message.data['offerCount'] ?? '1';
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(
+  //           content: Row(
+  //             children: [
+  //               const Icon(Icons.notifications_active, color: Colors.white),
+  //               const SizedBox(width: 12),
+  //               Expanded(
+  //                 child: Text(
+  //                   'You have $offerCount offer(s) to review!',
+  //                   style: const TextStyle(fontWeight: FontWeight.w600),
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //           backgroundColor: const Color(0xFF00897B),
+  //           behavior: SnackBarBehavior.floating,
+  //           action: SnackBarAction(
+  //             label: 'VIEW',
+  //             textColor: Colors.white,
+  //             onPressed: () {
+  //               Navigator.pushNamed(context, '/offer-approval');
+  //             },
+  //           ),
+  //         ),
+  //       );
+  //       break;
+  //
+  //     case 'verification_code':
+  //     // Navigate to approval screen to see verification code
+  //       Navigator.pushNamed(context, '/offer-approval');
+  //
+  //       // Show the code in a dialog
+  //       Future.delayed(const Duration(milliseconds: 300), () {
+  //         if (mounted) {
+  //           showDialog(
+  //             context: context,
+  //             builder: (context) => AlertDialog(
+  //               shape: RoundedRectangleBorder(
+  //                 borderRadius: BorderRadius.circular(16),
+  //               ),
+  //               backgroundColor: Colors.grey[900],
+  //               content: Column(
+  //                 mainAxisSize: MainAxisSize.min,
+  //                 children: [
+  //                   Icon(
+  //                     Icons.lock_outline,
+  //                     size: 48,
+  //                     color: Colors.green[400],
+  //                   ),
+  //                   const SizedBox(height: 16),
+  //                   Text(
+  //                     'Your Verification Code',
+  //                     style: TextStyle(
+  //                       fontSize: 16,
+  //                       fontWeight: FontWeight.bold,
+  //                       color: Colors.green[400],
+  //                     ),
+  //                   ),
+  //                   const SizedBox(height: 20),
+  //                   Container(
+  //                     padding: const EdgeInsets.symmetric(
+  //                       vertical: 16,
+  //                       horizontal: 24,
+  //                     ),
+  //                     decoration: BoxDecoration(
+  //                       color: Colors.white.withOpacity(0.1),
+  //                       borderRadius: BorderRadius.circular(12),
+  //                       border: Border.all(
+  //                         color: Colors.green[400]!.withOpacity(0.5),
+  //                         width: 2,
+  //                       ),
+  //                     ),
+  //                     child: Text(
+  //                       message.data['verificationCode'] ?? '----',
+  //                       style: const TextStyle(
+  //                         color: Colors.white,
+  //                         fontSize: 40,
+  //                         fontWeight: FontWeight.w900,
+  //                         letterSpacing: 16,
+  //                         fontFamily: 'Courier',
+  //                       ),
+  //                     ),
+  //                   ),
+  //                   const SizedBox(height: 16),
+  //                   Text(
+  //                     'Share this with ${message.data['providerName']} when they arrive',
+  //                     textAlign: TextAlign.center,
+  //                     style: TextStyle(
+  //                       fontSize: 12,
+  //                       color: Colors.grey[400],
+  //                     ),
+  //                   ),
+  //                 ],
+  //               ),
+  //               actions: [
+  //                 TextButton(
+  //                   onPressed: () => Navigator.pop(context),
+  //                   child: const Text(
+  //                     'GOT IT',
+  //                     style: TextStyle(color: Colors.white),
+  //                   ),
+  //                 ),
+  //               ],
+  //             ),
+  //           );
+  //         }
+  //       });
+  //       break;
+  //
+  //     default:
+  //     // Generic navigation
+  //       final redirectTo = message.data['redirectTo'];
+  //       if (redirectTo != null && redirectTo.isNotEmpty) {
+  //         Navigator.pushNamed(context, '/$redirectTo');
+  //       }
+  //   }
+  // }
   void _showErrorSnackBar(String message) {
     if (!mounted)
       return;

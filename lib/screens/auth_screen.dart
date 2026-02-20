@@ -686,6 +686,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   bool _isLoading = false;
   bool _isLoginMode = true;
+  bool _isEmailLogin = true;
   bool _obscurePassword = true;
 
   @override
@@ -699,36 +700,43 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
-  // ---------------------------------------------------------------------------
-  // ACTION: SUBMIT FORM
-  // ---------------------------------------------------------------------------
+  // Smart formatter that auto-appends +91 if missing
+  String get _formattedPhone {
+    String phone = _phoneController.text.trim();
+    if (phone.isEmpty) return phone;
+    if (phone.startsWith('+')) return phone;
+
+    phone = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (phone.length == 10) {
+      return '+91$phone';
+    }
+    return '+$phone';
+  }
+
   Future<void> _submitForm(String userType) async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
 
     try {
       if (_isLoginMode) {
-        await _handleLogin();
+        if (_isEmailLogin) {
+          await _handleEmailLogin();
+        } else {
+          await _startPhoneLoginFlow();
+        }
       } else {
-        // Registration: start OTP verification flow
         await _startRegistrationFlow(userType);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // LOGIN FLOW
-  // ---------------------------------------------------------------------------
-  Future<void> _handleLogin() async {
+  Future<void> _handleEmailLogin() async {
     final user = await _authService.signIn(
       email: _emailController.text.trim(),
       password: _passwordController.text.trim(),
@@ -736,77 +744,61 @@ class _AuthScreenState extends State<AuthScreen> {
 
     if (user != null && mounted) {
       final userDoc = await _authService.getUserData(user.uid);
-
       if (userDoc != null && userDoc.exists) {
         final userData = userDoc.data() as Map<String, dynamic>;
-        final actualUserType = userData['userType'] as String? ?? 'requester';
-
-        if (actualUserType == 'provider') {
-          final profileComplete = userData['profileComplete'] as bool? ?? false;
-          if (!profileComplete) {
-            Navigator.pushReplacementNamed(context, '/manage-services');
-          } else {
-            Navigator.pushReplacementNamed(context, '/provider-dashboard');
-          }
-        } else {
-          Navigator.pushReplacementNamed(context, '/service-selection');
-        }
+        Navigator.pushReplacementNamed(context, userData['userType'] == 'provider' ? '/provider-dashboard' : '/service-selection');
       }
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // REGISTRATION FLOW (OTP)
-  // ---------------------------------------------------------------------------
-  Future<void> _startRegistrationFlow(String userType) async {
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter phone number'), backgroundColor: Colors.red),
-        );
-      }
-      return;
-    }
-
+  Future<void> _startPhoneLoginFlow() async {
+    final phone = _formattedPhone;
     await _authService.startPhoneVerification(
       phoneNumber: phone,
       onCodeSent: (verificationId, resendToken) {
-        setState(() => _isLoading = false);
-        _showOtpDialog(verificationId, userType);
-      },
-      onVerificationFailed: (e) {
-        setState(() => _isLoading = false);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Verification Failed: ${e.message}"), backgroundColor: Colors.red),
-          );
+          setState(() => _isLoading = false);
+          _showOtpDialog(verificationId, null, isLogin: true);
         }
       },
+      onVerificationFailed: (e) => _onAuthError(e.message),
     );
   }
 
-  void _showOtpDialog(String verificationId, String userType) {
-    final otpController = TextEditingController();
+  Future<void> _startRegistrationFlow(String userType) async {
+    final phone = _formattedPhone;
+    await _authService.startPhoneVerification(
+      phoneNumber: phone,
+      onCodeSent: (verificationId, resendToken) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          _showOtpDialog(verificationId, userType, isLogin: false);
+        }
+      },
+      onVerificationFailed: (e) => _onAuthError(e.message),
+    );
+  }
 
+  void _onAuthError(String? message) {
+    if (mounted) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $message"), backgroundColor: Colors.red));
+    }
+  }
+
+  void _showOtpDialog(String verificationId, String? userType, {required bool isLogin}) {
+    final otpController = TextEditingController();
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text("Verify Phone Number"),
+        title: Text(isLogin ? "Login OTP" : "Verify Phone"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text("Enter the 6-digit code sent to ${_phoneController.text}"),
-            const SizedBox(height: 12),
-            TextField(
-              controller: otpController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "OTP Code",
-                border: OutlineInputBorder(),
-              ),
-            ),
+            Text("Enter code sent to $_formattedPhone"),
+            const SizedBox(height: 16),
+            TextField(controller: otpController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "OTP Code", border: OutlineInputBorder())),
           ],
         ),
         actions: [
@@ -814,29 +806,36 @@ class _AuthScreenState extends State<AuthScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _finalizeRegistration(verificationId, otpController.text.trim(), userType);
+              if (isLogin) {
+                _finalizePhoneLogin(verificationId, otpController.text.trim());
+              } else {
+                _finalizeRegistration(verificationId, otpController.text.trim(), userType!);
+              }
             },
-            child: const Text("Verify & Register"),
+            child: Text("Verify"),
           ),
         ],
       ),
     );
   }
 
+  Future<void> _finalizePhoneLogin(String verificationId, String smsCode) async {
+    setState(() => _isLoading = true);
+    try {
+      final user = await _authService.signInWithPhone(verificationId: verificationId, smsCode: smsCode);
+      if (user != null && mounted) {
+        final userDoc = await _authService.getUserData(user.uid);
+        if (userDoc != null && userDoc.exists) {
+          final userData = userDoc.data() as Map<String, dynamic>;
+          Navigator.pushReplacementNamed(context, userData['userType'] == 'provider' ? '/provider-dashboard' : '/service-selection');
+        }
+      }
+    } catch (e) { _onAuthError(e.toString()); }
+  }
+
   Future<void> _finalizeRegistration(String verificationId, String smsCode, String userType) async {
     setState(() => _isLoading = true);
-
     try {
-      final isProvider = userType == 'provider';
-
-      // Get FCM token (optional)
-      String? fcmToken;
-      try {
-        fcmToken = await FirebaseMessaging.instance.getToken();
-      } catch (_) {
-        fcmToken = null;
-      }
-
       final user = await _authService.registerWithVerifiedPhone(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
@@ -844,46 +843,26 @@ class _AuthScreenState extends State<AuthScreen> {
         smsCode: smsCode,
         fullName: _nameController.text.trim(),
         userType: userType,
-        phone: _phoneController.text.trim(),
-        address: '',
-        latitude: 0.0,
-        longitude: 0.0,
-        providerType: isProvider ? 'hospital' : '',
-        description: '',
-        isHFRVerified: isProvider ? false : null,
-        isNMCVerified: isProvider ? false : null,
-        hfrId: isProvider ? _hfrController.text.trim() : null,
-        nmcId: isProvider ? _nmcController.text.trim() : null,
-        fcmToken: fcmToken,
+        phone: _formattedPhone,
+        hfrId: userType == 'provider' ? _hfrController.text.trim() : null,
+        nmcId: userType == 'provider' ? _nmcController.text.trim() : null,
       );
 
       if (user != null && mounted) {
-        Navigator.pushReplacementNamed(context, isProvider ? '/manage-services' : '/service-selection');
+        Navigator.pushReplacementNamed(context, userType == 'provider' ? '/manage-services' : '/service-selection');
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-        );
-      }
-    }
+    } catch (e) { _onAuthError(e.toString()); }
   }
 
-  // ---------------------------------------------------------------------------
-  // UI BUILD
-  // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final userType = args?['userType'] ?? 'requester';
     final isProvider = userType == 'provider';
+    final themeColor = isProvider ? const Color(0xFF00897B) : Colors.blue;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isProvider ? 'Medical Provider Portal' : 'Citizen Sign In'),
-        backgroundColor: const Color(0xFF00897B),
-      ),
+      appBar: AppBar(title: Text(isProvider ? 'Medical Provider Portal' : 'Citizen Sign In'), backgroundColor: themeColor, foregroundColor: Colors.white),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Form(
@@ -891,49 +870,55 @@ class _AuthScreenState extends State<AuthScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 20),
-              Text(
-                _isLoginMode ? 'Welcome Back' : 'Join the Network',
-                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
+              Text(_isLoginMode ? 'Welcome Back' : 'Join the Network', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
               const SizedBox(height: 30),
+
+              if (_isLoginMode) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ChoiceChip(label: const Text('Email'), selected: _isEmailLogin, onSelected: (val) => setState(() => _isEmailLogin = true)),
+                    const SizedBox(width: 16),
+                    ChoiceChip(label: const Text('Phone OTP'), selected: !_isEmailLogin, onSelected: (val) => setState(() => _isEmailLogin = false)),
+                  ],
+                ),
+                const SizedBox(height: 24),
+              ],
 
               if (!_isLoginMode) ...[
                 _buildTextField(_nameController, 'Full Name', Icons.person_outline),
                 const SizedBox(height: 16),
-                _buildTextField(_phoneController, 'Phone Number (+91...)', Icons.phone, keyboardType: TextInputType.phone),
+                _buildTextField(_phoneController, 'Phone Number (10 digits)', Icons.phone, keyboardType: TextInputType.phone),
+                const SizedBox(height: 16),
+                if (isProvider) ...[
+                  _buildTextField(_hfrController, 'HFR Facility ID', Icons.account_balance),
+                  const SizedBox(height: 16),
+                  _buildTextField(_nmcController, 'NMC Doctor ID', Icons.verified_user),
+                  const SizedBox(height: 16),
+                ],
+              ],
+
+              if (_isEmailLogin || !_isLoginMode) ...[
+                _buildTextField(_emailController, 'Email Address', Icons.email_outlined, keyboardType: TextInputType.emailAddress),
+                const SizedBox(height: 16),
+                _buildTextField(_passwordController, 'Password', Icons.lock_outlined, isPassword: true),
                 const SizedBox(height: 16),
               ],
 
-              _buildTextField(_emailController, 'Email Address', Icons.email_outlined, keyboardType: TextInputType.emailAddress),
-              const SizedBox(height: 16),
-              _buildTextField(_passwordController, 'Password', Icons.lock_outlined, isPassword: true),
-              const SizedBox(height: 16),
-
-              if (!_isLoginMode && isProvider) ...[
-                const Divider(height: 40),
-                const Text("Professional Credentials", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF00897B))),
-                const SizedBox(height: 12),
-                _buildTextField(_hfrController, 'HFR Facility ID', Icons.account_balance_outlined),
+              if (_isLoginMode && !_isEmailLogin) ...[
+                _buildTextField(_phoneController, 'Phone Number', Icons.phone, keyboardType: TextInputType.phone),
                 const SizedBox(height: 16),
-                _buildTextField(_nmcController, 'NMC Registration No.', Icons.medical_services_outlined),
-                const SizedBox(height: 24),
               ],
 
               ElevatedButton(
                 onPressed: _isLoading ? null : () => _submitForm(userType),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00897B),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : Text(_isLoginMode ? 'SIGN IN' : 'VERIFY & REGISTER'),
+                style: ElevatedButton.styleFrom(backgroundColor: themeColor, padding: const EdgeInsets.symmetric(vertical: 16)),
+                child: _isLoading
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Text(_isLoginMode ? 'SIGN IN' : 'VERIFY & REGISTER', style: const TextStyle(color: Colors.white)),
               ),
 
-              TextButton(
-                onPressed: () => setState(() => _isLoginMode = !_isLoginMode),
-                child: Text(_isLoginMode ? 'New here? Create account' : 'Have an account? Login'),
-              ),
+              TextButton(onPressed: () => setState(() => _isLoginMode = !_isLoginMode), child: Text(_isLoginMode ? 'New here? Create account' : 'Have an account? Login')),
             ],
           ),
         ),
@@ -943,12 +928,9 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool isPassword = false, TextInputType? keyboardType}) {
     return TextFormField(
-      controller: controller,
-      obscureText: isPassword && _obscurePassword,
-      keyboardType: keyboardType,
+      controller: controller, obscureText: isPassword && _obscurePassword, keyboardType: keyboardType,
       decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
+        labelText: label, prefixIcon: Icon(icon),
         suffixIcon: isPassword ? IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)) : null,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
