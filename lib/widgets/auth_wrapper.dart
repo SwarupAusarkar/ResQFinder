@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../services/auth_service.dart'; // Import AuthService
+import '../services/auth_service.dart'; 
 import '../screens/home_screen.dart';
-import '../screens/auth_screen.dart';
 import '../screens/service_selection_screen.dart';
 import '../screens/provider_dashboard_screen.dart';
 import '../screens/manage_services_screen.dart';
+import '../screens/admin_dashboard_screen.dart'; // NEW: Import Admin Screen
 
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
@@ -19,16 +19,23 @@ class AuthWrapper extends StatelessWidget {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         
-        // 1. Show loading while checking Firebase Auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
         
-        // 2. If User is Logged In -> Fetch Role Data
         if (snapshot.hasData && snapshot.data != null) {
+          final currentUser = snapshot.data!;
+
+          // --- NEW: ADMIN BYPASS ---
+          // If the logged-in user is the admin, send them directly to the dashboard.
+          // Do NOT search for their profile in the Firestore database.
+          if (currentUser.email == 'admin@resqfinder.com') {
+            return const AdminDashboardScreen();
+          }
+          // -------------------------
+
           return FutureBuilder<DocumentSnapshot?>(
-            // USE THE SERVICE TO CHECK BOTH COLLECTIONS
-            future: authService.getUserData(snapshot.data!.uid),
+            future: authService.getUserData(currentUser.uid),
             builder: (context, userDocSnapshot) {
               
               if (userDocSnapshot.connectionState == ConnectionState.waiting) {
@@ -39,7 +46,6 @@ class AuthWrapper extends StatelessWidget {
                 return _buildErrorScreen("Error loading profile: ${userDocSnapshot.error}");
               }
 
-              // Handle case where user exists in Auth but not in Firestore (e.g. deleted manually)
               if (!userDocSnapshot.hasData || userDocSnapshot.data == null || !userDocSnapshot.data!.exists) {
                 return _buildErrorScreen("User profile not found in database.");
               }
@@ -52,11 +58,7 @@ class AuthWrapper extends StatelessWidget {
 
               final userType = userData['userType'] as String?;
 
-              // 3. Routing Logic
               if (userType == 'provider') {
-                // Providers: Check if they have finished setup
-                // (Note: In our new flow, we set profileComplete = true on signup, 
-                // but checking here makes it robust for future edits)
                 final profileComplete = userData['profileComplete'] as bool? ?? false;
                 
                 if (!profileComplete) {
@@ -64,14 +66,12 @@ class AuthWrapper extends StatelessWidget {
                 }
                 return ProviderDashboardScreen();
               } else {
-                // Requesters: Go to Service Selection
                 return const ServiceSelectionScreen();
               }
             },
           );
         }
         
-        // 3. If User is Not Logged In -> Show Home (Landing)
         return const HomeScreen();
       },
     );

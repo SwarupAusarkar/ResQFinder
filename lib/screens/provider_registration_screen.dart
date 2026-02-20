@@ -1,7 +1,5 @@
-import 'dart:io'; 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:image_picker/image_picker.dart';
 import '../services/auth_service.dart';
 
 class ProviderRegistrationScreen extends StatefulWidget {
@@ -13,7 +11,6 @@ class ProviderRegistrationScreen extends StatefulWidget {
 class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final AuthService _authService = AuthService();
-  final ImagePicker _picker = ImagePicker(); 
   
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -27,9 +24,6 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
   String _selectedType = 'hospital';
   bool _isLoading = false;
 
-  File? _certificateImage;
-  List<File> _facilityImages = [];
-
   @override
   void dispose() {
     _nameController.dispose(); _emailController.dispose(); _passwordController.dispose();
@@ -38,7 +32,6 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
     super.dispose();
   }
 
-  // NEW: Smart Formatter
   String get _formattedPhone {
     String phone = _phoneController.text.trim();
     if (phone.isEmpty) return phone;
@@ -49,31 +42,11 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
     return '+$phone'; 
   }
 
-  Future<void> _pickCertificate() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (pickedFile != null) setState(() => _certificateImage = File(pickedFile.path));
-  }
-
-  Future<void> _pickFacilityImages() async {
-    final pickedFiles = await _picker.pickMultiImage(imageQuality: 80);
-    if (pickedFiles.isNotEmpty) {
-      setState(() => _facilityImages.addAll(pickedFiles.map((xfile) => File(xfile.path))));
-    }
-  }
-  
   Future<void> _startRegistrationFlow() async {
     if (!_formKey.currentState!.validate()) return;
     
     if (_latController.text.isEmpty || _lonController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please capture clinic location first.')));
-      return;
-    }
-    if (_certificateImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Upload your Facility Certificate to proceed.')));
-      return;
-    }
-    if (_facilityImages.length < 5) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('You must upload at least 5 photos. You have ${_facilityImages.length}.')));
       return;
     }
 
@@ -143,12 +116,6 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
         longitude: double.parse(_lonController.text),
         providerType: _selectedType,
         description: _descriptionController.text.trim(),
-        hfrId: null, // REMOVED
-        nmcId: null, // REMOVED
-        isHFRVerified: false,
-        isNMCVerified: false,
-        certificateImage: _certificateImage, 
-        facilityImages: _facilityImages,     
       );
 
       if (mounted) Navigator.pushReplacementNamed(context, '/provider-dashboard');
@@ -171,49 +138,7 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildSectionTitle('1. Document Verification'),
-              const Text("Upload your facility registration certificate.", style: TextStyle(color: Colors.grey, fontSize: 12)),
-              const SizedBox(height: 12),
-
-              OutlinedButton.icon(
-                onPressed: _pickCertificate,
-                icon: const Icon(Icons.upload_file),
-                label: Text(_certificateImage == null ? 'Upload Certificate Photo *' : 'Certificate Selected'),
-                style: OutlinedButton.styleFrom(foregroundColor: _certificateImage == null ? Colors.red : Colors.green),
-              ),
-
-              const SizedBox(height: 24),
-              _buildSectionTitle('2. Physical Facility Verification'),
-              const Text("Upload MINIMUM 5 photos showing the exterior, reception, and wards.", style: TextStyle(color: Colors.grey, fontSize: 12)),
-              const SizedBox(height: 12),
-
-              OutlinedButton.icon(
-                onPressed: _pickFacilityImages,
-                icon: const Icon(Icons.add_a_photo),
-                label: const Text('Select Facility Photos (Min 5) *'),
-              ),
-              const SizedBox(height: 8),
-              
-              if (_facilityImages.isNotEmpty)
-                Wrap(
-                  spacing: 8, runSpacing: 8,
-                  children: _facilityImages.map((file) => Stack(
-                    alignment: Alignment.topRight,
-                    children: [
-                      ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(file, width: 70, height: 70, fit: BoxFit.cover)),
-                      GestureDetector(
-                        onTap: () => setState(() => _facilityImages.remove(file)),
-                        child: Container(decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white), child: const Icon(Icons.cancel, color: Colors.red, size: 24)),
-                      )
-                    ],
-                  )).toList(),
-                ),
-              
-              const SizedBox(height: 4),
-              Text('Selected: ${_facilityImages.length}/5 minimum', style: TextStyle(color: _facilityImages.length >= 5 ? Colors.green : Colors.red, fontWeight: FontWeight.bold)),
-
-              const SizedBox(height: 24),
-              _buildSectionTitle('3. Facility Information'),
+              _buildSectionTitle('Facility Information'),
               const SizedBox(height: 12),
               _buildTextField(_nameController, 'Facility/Provider Name', Icons.business),
               const SizedBox(height: 12),
@@ -235,7 +160,7 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
               _buildTextField(_descriptionController, 'Services Description', Icons.description, maxLines: 3),
 
               const SizedBox(height: 24),
-              _buildSectionTitle('4. Location'),
+              _buildSectionTitle('Location'),
               const SizedBox(height: 12),
               _buildLocationSection(),
 

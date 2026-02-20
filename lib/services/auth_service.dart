@@ -11,10 +11,6 @@ class AuthService {
   Stream<User?> get authStateChanges => _auth.authStateChanges();
   User? get currentUser => _auth.currentUser;
 
-  // ---------------------------------------------------------------------------
-  // 📞 PHONE OTP + REGISTRATION FLOW
-  // ---------------------------------------------------------------------------
-
   Future<void> startPhoneVerification({
     required String phoneNumber,
     required Function(String verificationId, int? resendToken) onCodeSent,
@@ -43,13 +39,6 @@ class AuthService {
     double? longitude,
     String? providerType,
     String? description,
-    bool? isHFRVerified,
-    bool? isNMCVerified,
-    String? hfrId,
-    String? nmcId,
-    
-    File? certificateImage,
-    List<File>? facilityImages,
   }) async {
     User? user;
     try {
@@ -59,26 +48,6 @@ class AuthService {
       if (user != null) {
         PhoneAuthCredential credential = PhoneAuthProvider.credential(verificationId: verificationId, smsCode: smsCode);
         await user.linkWithCredential(credential);
-
-        String? certUrl;
-        List<String> facilityUrls = [];
-
-        if (userType == 'provider') {
-          if (certificateImage != null) {
-            final certRef = _storage.ref().child('provider_certs/${user.uid}_cert.jpg');
-            await certRef.putFile(certificateImage);
-            certUrl = await certRef.getDownloadURL();
-          }
-
-          if (facilityImages != null && facilityImages.isNotEmpty) {
-            for (int i = 0; i < facilityImages.length; i++) {
-              final facRef = _storage.ref().child('provider_facilities/${user.uid}/fac_img_$i.jpg');
-              await facRef.putFile(facilityImages[i]);
-              String url = await facRef.getDownloadURL();
-              facilityUrls.add(url);
-            }
-          }
-        }
 
         String collectionPath = (userType == 'provider') ? 'providers' : 'requesters';
         
@@ -101,13 +70,11 @@ class AuthService {
             'description': description ?? '',
             'isHFRVerified': false, 
             'isNMCVerified': false, 
-            'hfrId': hfrId ?? '',
-            'nmcId': nmcId ?? '',
-            'isAvailable': false, 
+            'isAvailable': false, // SECURE: Forced offline until verified
+            'verificationStatus': 'pending', // SECURE: Pending manual approval
             'inventory': [], 
-            'certificateUrl': certUrl ?? '',
-            'facilityUrls': facilityUrls,
-            'verificationStatus': 'pending', 
+            'certificateUrl': '', // Empty for now, uploaded in profile
+            'facilityUrls': [],   // Empty for now, uploaded in profile
           });
         }
 
@@ -123,37 +90,11 @@ class AuthService {
     }
   }
 
-  Future<User?> signUp({
-     required String email, required String password, required String fullName, required String userType,
-     required String phone, required String address, required double latitude, required double longitude,
-     required String providerType, required String description, String? hfrId, String? nmcId,
-  }) async {
-    UserCredential result = await _auth.createUserWithEmailAndPassword(email: email, password: password);
-    User? user = result.user;
-    if (user != null) {
-      String collectionPath = (userType == 'provider') ? 'providers' : 'requesters';
-      await _firestore.collection(collectionPath).doc(user.uid).set({
-        'uid': user.uid, 'email': email, 'name': fullName, 'userType': userType, 'phone': phone,
-        'createdAt': FieldValue.serverTimestamp(), 'profileComplete': true,
-        if (userType == 'provider') ...{
-          'address': address, 'latitude': latitude, 'longitude': longitude, 'providerType': providerType,
-          'description': description, 'isHFRVerified': false, 'isNMCVerified': false, 'hfrId': hfrId ?? '',
-          'nmcId': nmcId ?? '', 'isAvailable': true, 'inventory': [], 
-        }
-      });
-    }
-    return user;
-  }
-
-  // ---------------------------------------------------------------------------
-  // 🔑 LOGIN & HELPERS
-  // ---------------------------------------------------------------------------
   Future<User?> signIn({required String email, required String password}) async {
     final userCredential = await _auth.signInWithEmailAndPassword(email: email, password: password);
     return userCredential.user;
   }
 
-  // NEW: Login purely with Phone Number OTP
   Future<User?> signInWithPhone({required String verificationId, required String smsCode}) async {
     try {
       PhoneAuthCredential credential = PhoneAuthProvider.credential(

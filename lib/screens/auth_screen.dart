@@ -78,6 +78,10 @@ class _AuthScreenState extends State<AuthScreen> {
     );
 
     if (user != null && mounted) {
+      if (user.email == 'admin@resqfinder.com') {
+        Navigator.pushReplacementNamed(context, '/admin-dashboard');
+        return; 
+      }
       final userDoc = await _authService.getUserData(user.uid);
       if (userDoc != null && userDoc.exists) {
         final userData = userDoc.data() as Map<String, dynamic>;

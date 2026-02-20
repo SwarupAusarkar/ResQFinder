@@ -44,16 +44,29 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
         location = await LocationService.getAddressFromLatLng(pos.latitude, pos.longitude);
       }
 
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      if (doc.exists) {
-        final profile = requester_model.fromFirestore(doc);
+      // CHANGED: Reading from 'requesters' collection
+      final doc = await FirebaseFirestore.instance.collection('requesters').doc(user.uid).get();
+      
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data() as Map<String, dynamic>;
+        
         setState(() {
-          _nameController.text = profile.fullName;
-          _phoneController.text = profile.phone;
-          _medicalController.text = profile.medicalNotes;
-          _sendSmsPermission = profile.sendSmsPermission;
-          _selectedBloodType = _bloodTypes.contains(profile.bloodGrp) ? profile.bloodGrp : 'Unknown';
-          _emergencyChecklist = profile.emergencyContacts;
+          _nameController.text = data['name'] ?? '';
+          _phoneController.text = data['phone'] ?? '';
+          _medicalController.text = data['medicalNotes'] ?? '';
+          _sendSmsPermission = data['sendSmsPermission'] ?? false;
+          
+          String bType = data['bloodGrp'] ?? 'Unknown';
+          _selectedBloodType = _bloodTypes.contains(bType) ? bType : 'Unknown';
+          
+          if (data['emergencyContacts'] != null) {
+            _emergencyChecklist = (data['emergencyContacts'] as List).map((e) {
+              return EmergencyContact(
+                name: e['name'] ?? '',
+                phone: e['phone'] ?? '',
+              )..isSelected = e['isSelected'] ?? true;
+            }).toList();
+          }
         });
       }
     } catch (e) {
@@ -71,7 +84,7 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
         // Fetch raw contacts from service
         final List<ContactInfo> rawContacts = await FlutterContactsService.getContacts();
 
-      final List<EmergencyContact> mappedContacts = rawContacts.map((c) {
+        final List<EmergencyContact> mappedContacts = rawContacts.map((c) {
           return EmergencyContact(
             name: c.displayName ?? "Unknown",
             phone: (c.phones != null && c.phones!.isNotEmpty)
@@ -89,7 +102,7 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
           builder: (context) => SizedBox(
             height: MediaQuery.of(context).size.height * 0.8,
             child: ContactSearchDialog(
-              contacts: mappedContacts, // Now types match correctly
+              contacts: mappedContacts, 
               onContactSelected: (selected) {
                 setState(() => _emergencyChecklist.add(selected..isSelected = true));
                 Navigator.pop(context);
@@ -108,20 +121,31 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
     if (user == null) return;
 
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      // CHANGED: Saving to 'requesters' collection
+      await FirebaseFirestore.instance.collection('requesters').doc(user.uid).set({
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
         'bloodGrp': _selectedBloodType,
         'medicalNotes': _medicalController.text.trim(),
-        'emergencyContacts': _emergencyChecklist.map((e) => e.toMap()).toList(),
+        // Map list of objects back to JSON
+        'emergencyContacts': _emergencyChecklist.map((e) => {
+          'name': e.name,
+          'phone': e.phone,
+          'isSelected': e.isSelected,
+        }).toList(),
         'sendSmsPermission': _sendSmsPermission,
         'location': location,
         'updatedAt': FieldValue.serverTimestamp(),
+        'profileComplete': true, // Keep this flag true
       }, SetOptions(merge: true));
 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Medical ID Updated"), backgroundColor: Colors.green));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Medical ID Updated"), backgroundColor: Colors.green));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Save Error: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Save Error: $e")));
+      }
     }
   }
 
@@ -175,11 +199,15 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
     );
   }
 
-  // UI Helpers (Omitted for brevity, but keep yours as they were)
+  // UI Helpers
   Widget _buildSectionHeader(String title) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)));
-  Widget _buildCard(List<Widget> children) => Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)]), child: Column(children: children));
+  
+  Widget _buildCard(List<Widget> children) => Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)]), child: Column(children: children));
+  
   Widget _buildTextField(TextEditingController c, String l, IconData i, {bool isPhone = false, int maxLines = 1}) => TextFormField(controller: c, maxLines: maxLines, keyboardType: isPhone ? TextInputType.phone : TextInputType.text, decoration: InputDecoration(labelText: l, prefixIcon: Icon(i, color: Colors.redAccent), border: InputBorder.none));
+  
   Widget _buildBloodTypeDropdown() => ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.bloodtype, color: Colors.redAccent), title: const Text("Blood Type"), trailing: DropdownButton<String>(value: _selectedBloodType, onChanged: (v) => setState(() => _selectedBloodType = v!), items: _bloodTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList()));
+  
   Widget _buildEmergencyContactList() {
     return Column(children: _emergencyChecklist.map((c) => Card(child: CheckboxListTile(title: Text(c.name), subtitle: Text(c.phone), value: c.isSelected, onChanged: (v) => setState(() => c.isSelected = v!), secondary: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => setState(() => _emergencyChecklist.remove(c)))))).toList());
   }
@@ -189,16 +217,40 @@ class ContactSearchDialog extends StatefulWidget {
   final List<EmergencyContact> contacts;
   final Function(EmergencyContact) onContactSelected;
   const ContactSearchDialog({super.key, required this.contacts, required this.onContactSelected});
-  @override State<ContactSearchDialog> createState() => _ContactSearchDialogState();
+  
+  @override 
+  State<ContactSearchDialog> createState() => _ContactSearchDialogState();
 }
 
 class _ContactSearchDialogState extends State<ContactSearchDialog> {
   late List<EmergencyContact> _filtered;
-  @override void initState() { super.initState(); _filtered = widget.contacts; }
-  @override Widget build(BuildContext context) {
+  
+  @override 
+  void initState() { 
+    super.initState(); 
+    _filtered = widget.contacts; 
+  }
+  
+  @override 
+  Widget build(BuildContext context) {
     return Column(children: [
-      Padding(padding: const EdgeInsets.all(16), child: TextField(decoration: const InputDecoration(hintText: "Search...", prefixIcon: Icon(Icons.search)), onChanged: (v) => setState(() => _filtered = widget.contacts.where((c) => c.name.toLowerCase().contains(v.toLowerCase())).toList()))),
-      Expanded(child: ListView.builder(itemCount: _filtered.length, itemBuilder: (context, i) => ListTile(title: Text(_filtered[i].name), subtitle: Text(_filtered[i].phone), onTap: () => widget.onContactSelected(_filtered[i]))))
+      Padding(
+        padding: const EdgeInsets.all(16), 
+        child: TextField(
+          decoration: const InputDecoration(hintText: "Search...", prefixIcon: Icon(Icons.search)), 
+          onChanged: (v) => setState(() => _filtered = widget.contacts.where((c) => c.name.toLowerCase().contains(v.toLowerCase())).toList())
+        )
+      ),
+      Expanded(
+        child: ListView.builder(
+          itemCount: _filtered.length, 
+          itemBuilder: (context, i) => ListTile(
+            title: Text(_filtered[i].name), 
+            subtitle: Text(_filtered[i].phone), 
+            onTap: () => widget.onContactSelected(_filtered[i])
+          )
+        )
+      )
     ]);
   }
 }

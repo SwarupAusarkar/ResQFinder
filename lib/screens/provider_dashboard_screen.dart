@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/location_service.dart';
 import '../models/request_model.dart';
 import 'manage_inventory_screen.dart';
+import 'provider_profile_edit_screen.dart'; // NEW: Import the profile screen
 
 class ProviderDashboardScreen extends StatefulWidget {
   const ProviderDashboardScreen({super.key});
@@ -37,12 +38,20 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
         backgroundColor: Colors.green[700],
         foregroundColor: Colors.white,
         actions: [
+          // NEW: Button to open Profile Screen
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: "Edit Profile",
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProviderProfileEditScreen())),
+          ),
           IconButton(
             icon: const Icon(Icons.inventory),
+            tooltip: "Inventory",
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageInventoryScreen())),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
+            tooltip: "Logout",
             onPressed: () => _authService.signOut(),
           ),
         ],

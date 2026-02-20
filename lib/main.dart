@@ -1,7 +1,4 @@
 import 'package:emergency_res_loc_new/models/inventory_item_model.dart';
-import 'package:emergency_res_loc_new/models/provider_model.dart';
-import 'package:emergency_res_loc_new/services/FCMService.dart';
-import 'package:emergency_res_loc_new/services/location_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -9,6 +6,7 @@ import 'screens/home_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/service_selection_screen.dart';
 import 'screens/provider_list_screen.dart';
+import 'screens/admin_dashboard_screen.dart';
 import 'screens/provider_details_screen.dart';
 import 'screens/map_screen.dart';
 import 'screens/provider_dashboard_screen.dart';
@@ -144,6 +142,7 @@ class EmergencyResourceLocatorApp extends StatelessWidget {
         '/auth': (context) => const AuthScreen(),
         '/service-selection': (context) => const ServiceSelectionScreen(),
         '/provider-list': (context) => const ProviderListScreen(),
+        '/admin-dashboard': (context) => const AdminDashboardScreen(),
         '/provider-details': (context) => const ProviderDetailsScreen(),
         '/map': (context) => const MapScreen(),
         '/provider-dashboard': (context) => ProviderDashboardScreen(),
