@@ -73,7 +73,7 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Setup Your Services'),
-        backgroundColor: Colors.green,
+        backgroundColor: Color(0xFF00897B),
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false, // No back button
       ),
@@ -120,7 +120,7 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
             child: ElevatedButton(
               onPressed: _saveServices,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
+                backgroundColor: Color(0xFF00897B),
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 50),
               ),

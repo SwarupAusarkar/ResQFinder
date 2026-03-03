@@ -18,14 +18,15 @@ class DataService {
         final Map<String, dynamic> jsonData = json.decode(jsonString);
 
         final List<dynamic> providersJson = jsonData['providers'];
-        _providers = providersJson
-            .map(
-              (json) => Provider.fromJson(
-            json['id'] ?? '',
-            json as Map<String, dynamic>,
-          ),
-        )
-            .toList();
+        _providers =
+            providersJson
+                .map(
+                  (json) => Provider.fromJson(
+                    json['id'] ?? '',
+                    json as Map<String, dynamic>,
+                  ),
+                )
+                .toList();
       } catch (e) {
         print('Error loading providers from JSON, using fallback: $e');
         _providers = _getFallbackProviders();
@@ -45,29 +46,30 @@ class DataService {
         final List<dynamic> requestsJson = jsonData['requests'];
 
         // Map fields to match the updated model requirements
-        _requests = requestsJson.map((json) {
-          final map = json as Map<String, dynamic>;
-          return EmergencyRequest(
-            id: map['id'] ?? '',
-            itemName: map['itemName'] ?? '',
-            itemQuantity: map['itemQuantity'] ?? 1,
-            itemUnit: map['itemUnit'] ?? '',
-            requesterName: map['requesterName'] ?? '',
-            requesterPhone: map['requesterPhone'] ?? '',
-            status: map['status'] ?? 'pending',
-            timestamp: DateTime.now(), // Use current time for dummy data
-            latitude: map['latitude']?.toDouble() ?? 0.0,
-            longitude: map['longitude']?.toDouble() ?? 0.0,
-            locationName: map['locationName'] ?? '',
-            masterRequestId: map['masterRequestId'] ?? '',
-            description: map['description'] ?? '',
-            providerId: '', // Initialized as empty for pending requests
-            requesterId: map['requesterId'] ?? '',
-            acceptedAt: DateTime.now(),
-            confirmedProviderId: '',
-            radius: map['radius']?.toDouble() ?? 5.0, // Default to 5.0 if missing
-          );
-        }).toList();
+        _requests =
+            requestsJson.map((json) {
+              final map = json as Map<String, dynamic>;
+              return EmergencyRequest(
+                id: map['id'] ?? '',
+                itemName: map['itemName'] ?? '',
+                itemQuantity: map['itemQuantity'] ?? 1,
+                itemUnit: map['itemUnit'] ?? '',
+                requesterName: map['requesterName'] ?? '',
+                requesterPhone: map['requesterPhone'] ?? '',
+                status: map['status'] ?? 'pending',
+                timestamp: DateTime.now(), // Use current time for dummy data
+                latitude: map['latitude']?.toDouble() ?? 0.0,
+                longitude: map['longitude']?.toDouble() ?? 0.0,
+                locationName: map['locationName'] ?? '',
+                masterRequestId: map['masterRequestId'] ?? '',
+                description: map['description'] ?? '',
+                requesterId: map['requesterId'] ?? '',
+                acceptedAt: DateTime.now(),
+                confirmedProviderId: '',
+                radius: map['radius']?.toDouble() ?? 5.0,
+                expiredAt: map['expiredAt'], // Default to 5.0 if missing
+              );
+            }).toList();
       } catch (e) {
         print('Error loading requests from JSON, using fallback: $e');
         _requests = _getFallbackRequests();
@@ -114,13 +116,15 @@ class DataService {
         name: 'Lilavati Hospital',
         type: 'hospital',
         phone: '+91-22-2640-5000',
-        address: 'A-791, Bandra Reclamation, Bandra West, Mumbai, Maharashtra 400050',
+        address:
+            'A-791, Bandra Reclamation, Bandra West, Mumbai, Maharashtra 400050',
         latitude: 19.0544,
         longitude: 72.8266,
         distance: 3.2,
         isAvailable: true,
         rating: 5,
-        description: 'Premium private hospital with advanced medical facilities.',
+        description:
+            'Premium private hospital with advanced medical facilities.',
         inventory: [
           InventoryItem(
             name: 'ICU Bed',
@@ -160,10 +164,10 @@ class DataService {
         itemQuantity: 1,
         itemUnit: 'beds',
         locationName: 'Andheri West',
-        providerId: '', // Must be non-null string
         acceptedAt: DateTime.now(),
         confirmedProviderId: '',
         radius: 5.0,
+        expiredAt: DateTime.now().subtract(const Duration(minutes: 15)),
       ),
     ];
   }
@@ -178,8 +182,9 @@ class DataService {
     final allProviders = await loadProviders();
     return allProviders
         .where(
-          (provider) => provider.type.toLowerCase() == serviceType.toLowerCase(),
-    )
+          (provider) =>
+              provider.type.toLowerCase() == serviceType.toLowerCase(),
+        )
         .toList();
   }
 

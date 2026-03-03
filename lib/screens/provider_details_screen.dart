@@ -2,6 +2,7 @@
 
 import 'package:emergency_res_loc_new/screens/send_request_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart'; // NEW IMPORT
 import '../models/provider_model.dart';
 import '../services/navigation_service.dart';
 
@@ -33,9 +34,7 @@ class ProviderDetailsScreen extends StatelessWidget {
         foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
-        // ** START: MODIFICATION **
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 160), // Increased bottom padding
-        // ** END: MODIFICATION **
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 160), 
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -176,7 +175,8 @@ class ProviderDetailsScreen extends StatelessWidget {
                       Icons.phone,
                       'Phone',
                       provider.phone,
-                      onTap: () => _showCallDialog(context, provider),
+                      // NEW: Calls the native dialer
+                      onTap: () => _makePhoneCall(provider.phone, context),
                     ),
                     const SizedBox(height: 12),
                     _buildDetailRow(
@@ -317,7 +317,8 @@ class ProviderDetailsScreen extends StatelessWidget {
           const SizedBox(height: 16),
           FloatingActionButton.extended(
             heroTag: "call",
-            onPressed: () => _showCallDialog(context, provider),
+            // NEW: Calls the native dialer
+            onPressed: () => _makePhoneCall(provider.phone, context),
             backgroundColor: Colors.green,
             icon: const Icon(Icons.phone, color: Colors.white),
             label: const Text(
@@ -434,84 +435,23 @@ class ProviderDetailsScreen extends StatelessWidget {
     }
   }
 
-  // Show call confirmation dialog
-  void _showCallDialog(BuildContext context, Provider provider) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.phone, color: Colors.green),
-            SizedBox(width: 8),
-            Text('Call Provider'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Call ${provider.name}?'),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.phone, size: 16),
-                  const SizedBox(width: 8),
-                  Text(
-                    provider.phone,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'This is a demo app - no actual call will be made.',
-              style: TextStyle(
-                fontSize: 12,
-                fontStyle: FontStyle.italic,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Calling ${provider.name}...'),
-                  backgroundColor: Colors.green,
-                  action: SnackBarAction(
-                    label: 'Dismiss',
-                    textColor: Colors.white,
-                    onPressed: () {},
-                  ),
-                ),
-              );
-            },
-            icon: const Icon(Icons.phone),
-            label: const Text('Call'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ],
-      ),
+  // NEW: Real Phone Call Logic
+  Future<void> _makePhoneCall(String phoneNumber, BuildContext context) async {
+    final Uri launchUri = Uri(
+      scheme: 'tel',
+      path: phoneNumber,
     );
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open the phone dialer.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

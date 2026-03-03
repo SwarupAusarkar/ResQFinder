@@ -1,9 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart'; // Added missing import
 import 'package:geolocator/geolocator.dart';
-import 'package:image_picker/image_picker.dart';
 import '../services/auth_service.dart';
 
 class ProviderRegistrationScreen extends StatefulWidget {
@@ -32,10 +31,10 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
 
   String _selectedType = 'hospital';
   bool _isLoading = false;
-  bool _isAvailableInitial = true;
 
+  // File Holders
   File? _certificateImage;
-  List<File> _facilityImages = [];
+  final List<File> _facilityImages = [];
 
   @override
   void dispose() {
@@ -154,8 +153,6 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
         description: _descriptionController.text.trim(),
         hfrId: _hfrIdController.text.trim(),
         nmcId: _nmcIdController.text.trim(),
-        // isHFRVerified: false,
-        // isNMCVerified: false,
         certificateImage: _certificateImage,
         facilityImages: _facilityImages,
       );
@@ -169,12 +166,12 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
     }
   }
 
-  // --- UI Components ---
   @override
   Widget build(BuildContext context) {
     const themeColor = Color(0xFF00897B);
     return Scaffold(
-      appBar: AppBar(title: const Text('Provider Registration'), backgroundColor: themeColor, foregroundColor: Colors.white),
+      backgroundColor: Colors.white,
+      appBar: AppBar(title: const Text('Provider Registration'), backgroundColor: themeColor, foregroundColor: Colors.white, elevation: 0),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Form(
@@ -210,6 +207,10 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
               const SizedBox(height: 12),
               _buildTextField(_nameController, 'Facility Name', Icons.business),
               const SizedBox(height: 12),
+              _buildTextField(_emailController, 'Official Email', Icons.email, type: TextInputType.emailAddress),
+              const SizedBox(height: 12),
+              _buildTextField(_passwordController, 'Password', Icons.lock, obscure: true),
+              const SizedBox(height: 12),
               _buildTextField(_phoneController, 'Phone (e.g. 9876543210)', Icons.phone, type: TextInputType.phone),
 
               const SizedBox(height: 24),
@@ -240,15 +241,15 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
     );
   }
 
-  // --- Helper UI Builders ---
+  // --- UI Builders ---
   Widget _buildSectionTitle(String title, Color color) => Padding(
     padding: const EdgeInsets.only(bottom: 8.0),
     child: Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
   );
 
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {TextInputType? type, int maxLines = 1}) {
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {TextInputType? type, int maxLines = 1, bool obscure = false}) {
     return TextFormField(
-      controller: controller, keyboardType: type, maxLines: maxLines,
+      controller: controller, keyboardType: type, maxLines: maxLines, obscureText: obscure,
       decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
       validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
     );
@@ -282,6 +283,7 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
 
   Widget _buildLocationCapture(Color color) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: color.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
       child: Column(

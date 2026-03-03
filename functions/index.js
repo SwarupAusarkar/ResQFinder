@@ -10,7 +10,15 @@
 const {setGlobalOptions} = require("firebase-functions");
 const {onRequest} = require("firebase-functions/https");
 const logger = require("firebase-functions/logger");
+const { initializeApp } = require("firebase-admin/app");
+initializeApp();
 
+const n = require("./notificationHelper");
+
+exports.onNewEmergencyRequest = n.onNewEmergencyRequest;
+exports.onOfferSent           = n.onOfferSent;
+exports.onRequestConfirmed    = n.onRequestConfirmed;
+exports.dailyInventoryReminder = n.dailyInventoryReminder;
 // For cost control, you can set the maximum number of containers that can be
 // running at the same time. This helps mitigate the impact of unexpected
 // traffic spikes by instead downgrading performance. This limit is a

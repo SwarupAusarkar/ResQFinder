@@ -79,39 +79,32 @@ class _ApprovalScreenState extends State<ApprovalScreen> {
   }
 
   @override
-  // ... inside _ApprovalScreenState ...
-
-  @override
   Widget build(BuildContext context) {
     final user = _authService.currentUser;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("Manage Offers"),
-        backgroundColor: const Color(0xFF00897B),
+        backgroundColor: Colors.red[700],
         elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _firestore
             .collection('emergency_requests')
             .where('requesterId', isEqualTo: user?.uid)
-        // status 'completed' is EXCLUDED here, so the card disappears
-        // once the provider enters the code on their end.
+        // Listen for all active states
             .where('status', whereIn: ['pending', 'provider_accepted', 'confirmed'])
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return _buildEmptyState();
-          }
-
+          // Sort by timestamp manually if Firestore ordering conflicts with 'whereIn'
           final requests = snapshot.data!.docs
               .map((doc) => EmergencyRequest.fromFirestore(doc))
               .toList()
             ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+          if (requests.isEmpty) return _buildEmptyState();
 
           return ListView.separated(
             padding: const EdgeInsets.all(16),
@@ -121,24 +114,19 @@ class _ApprovalScreenState extends State<ApprovalScreen> {
               final req = requests[index];
               final visibleOffers = _getVisibleOffers(req);
 
-              // If a request has no relevant offers to show, hide the whole section
               if (visibleOffers.isEmpty) return const SizedBox.shrink();
 
-              return AnimatedOpacity(
-                duration: const Duration(milliseconds: 500),
-                opacity: 1.0,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildRequestHeader(req),
-                    const SizedBox(height: 12),
-                    ...visibleOffers.map((offer) => OfferApprovalCard(
-                      request: req,
-                      offer: offer,
-                      onAction: (off, isApprove) => _handleOfferAction(req, off, isApprove),
-                    )),
-                  ],
-                ),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildRequestHeader(req),
+                  const SizedBox(height: 12),
+                  ...visibleOffers.map((offer) => OfferApprovalCard(
+                    request: req,
+                    offer: offer,
+                    onAction: (off, isApprove) => _handleOfferAction(req, off, isApprove),
+                  )),
+                ],
               );
             },
           );
@@ -146,16 +134,14 @@ class _ApprovalScreenState extends State<ApprovalScreen> {
       ),
     );
   }
-
   List<RequestOffer> _getVisibleOffers(EmergencyRequest request) {
     if (request.status == 'confirmed') {
-      // ONLY show the one offer that was confirmed.
-      // All other rejected offers disappear immediately.
+      // Filter for the specific provider that was confirmed
       return request.offers
-          .where((o) => o.providerId == request.confirmedProviderId)
+          .where((o) => o.providerId == request.confirmedProviderId || o.status == 'confirmed')
           .toList();
     } else {
-      // While pending, only show providers who are currently 'waiting' (offering help)
+      // While pending, show all active (waiting) offers
       return request.offers.where((o) => o.status == 'waiting').toList();
     }
   }
@@ -207,12 +193,12 @@ class _ApprovalScreenState extends State<ApprovalScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.check, color: Colors.green, size: 16),
+                  Icon(Icons.check, color: Color(0xFF00897B), size: 16),
                   SizedBox(width: 8),
                   Text(
                     'Provider confirmed!',
                     style: TextStyle(
-                      color: Colors.green,
+                      color: Color(0xFF00897B),
                       fontWeight: FontWeight.w600,
                     ),
                   ),

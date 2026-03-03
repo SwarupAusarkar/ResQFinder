@@ -79,7 +79,8 @@ class _AddInventoryItemScreenState extends State<AddInventoryItemScreen> {
     final updatedInventory = [...widget.currentInventory, ..._itemsToAdd];
 
     try {
-      await _firestore.collection('users').doc(user.uid).update({
+      // CHANGED: Fixed collection from 'users' to 'providers'
+      await _firestore.collection('providers').doc(user.uid).update({
         'inventory': updatedInventory.map((item) => item.toMap()).toList(),
       });
 

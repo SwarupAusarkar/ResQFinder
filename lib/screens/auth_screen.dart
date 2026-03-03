@@ -743,6 +743,10 @@ class _AuthScreenState extends State<AuthScreen> {
     );
 
     if (user != null && mounted) {
+      if (user.email == 'admin@resqfinder.com') {
+        Navigator.pushReplacementNamed(context, '/admin-dashboard');
+        return; 
+      }
       final userDoc = await _authService.getUserData(user.uid);
       if (userDoc != null && userDoc.exists) {
         final userData = userDoc.data() as Map<String, dynamic>;
@@ -859,7 +863,7 @@ class _AuthScreenState extends State<AuthScreen> {
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final userType = args?['userType'] ?? 'requester';
     final isProvider = userType == 'provider';
-    final themeColor = isProvider ? const Color(0xFF00897B) : Colors.blue;
+    final themeColor = const Color(0xFF00897B);
 
     return Scaffold(
       appBar: AppBar(title: Text(isProvider ? 'Medical Provider Portal' : 'Citizen Sign In'), backgroundColor: themeColor, foregroundColor: Colors.white),
