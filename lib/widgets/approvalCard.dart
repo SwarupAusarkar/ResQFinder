@@ -159,7 +159,7 @@ class OfferApprovalCard extends StatelessWidget {
               );
             },
             icon: const Icon(Icons.copy_rounded, size: 20),
-            color: Colors.green.shade700,
+            color: Color(0xFF00897B),
           ),
         ],
       ),
@@ -184,7 +184,7 @@ class OfferApprovalCard extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () => onAction(offer, true),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green.shade500,
+                backgroundColor: Color(0xFF00897B),
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

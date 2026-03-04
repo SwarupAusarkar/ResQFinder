@@ -64,7 +64,7 @@ class AuthWrapper extends StatelessWidget {
                 if (!profileComplete) {
                   return const ManageServicesScreen();
                 }
-                return ProviderDashboardScreen();
+                return ProviderDashboardScreen(initialTab: '',);
               } else {
                 return const ServiceSelectionScreen();
               }

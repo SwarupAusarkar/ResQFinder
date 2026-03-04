@@ -1,4 +1,7 @@
+import 'dart:ui';
+
 import 'package:emergency_res_loc_new/screens/OfferApprovalScreen.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
@@ -93,7 +96,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     });
   }
 
- Future<void> _performSearch(String query) async {
+  Future<void> _performSearch(String query) async {
     if (!mounted) return;
 
     setState(() {
@@ -334,7 +337,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
             onPressed: (){Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => ApprovalScreen()
+                  builder: (context) => ApprovalScreen()
               ),
             );
             },
@@ -377,28 +380,25 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
         ],
       ),
       floatingActionButton: _filteredProviders.isNotEmpty
-          ? FloatingActionButton.extended(
-        onPressed:() {
-      Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => SendRequestScreen(
-          inventoryItem: InventoryItem(
-            name: 'Select Item',
-            quantity: 0,
-            unit: 'Units',
-            lastUpdated: DateTime.now(),
-          ),
-        ),
-      ),
-    );
-  },
+          ? FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => SendRequestScreen(
+                inventoryItem: InventoryItem(
+                  name: 'Select Item',
+                  quantity: 0,
+                  unit: 'Units',
+                  lastUpdated: DateTime.now(),
+                ),
+              ),
+            ),
+          );
+        },
         backgroundColor: _getServiceColor(),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'New  Request',
-          style: TextStyle(color: Colors.white),
-        ),
+        // Circular shape is the default for FloatingActionButton
+        child: const Icon(Icons.add, color: Colors.white, size: 28),
       )
           : null,
     );
@@ -508,7 +508,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
     );
   }
 
- Widget _buildInfoBar() {
+  Widget _buildInfoBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       color: _getServiceColor().withOpacity(0.1),
@@ -548,7 +548,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
                     'Available',
                     style: TextStyle(fontSize: 10),
                   ),
-                  backgroundColor: Colors.green.withOpacity(0.2),
+                  backgroundColor: Color(0xFF00897B).withOpacity(0.2),
                   deleteIcon: const Icon(Icons.close, size: 14),
                   onDeleted: () {
                     setState(() => _showAvailableOnly = false);
@@ -564,7 +564,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
                   '${_selectedRadius ~/ 1000}km',
                   style: const TextStyle(fontSize: 10),
                 ),
-                backgroundColor: Colors.blue.withOpacity(0.1),
+                backgroundColor: Color(0xFF00897B).withOpacity(0.1),
                 deleteIcon: const Icon(Icons.close, size: 14),
                 onDeleted: () {
                   setState(() => _selectedRadius = 50000);
@@ -752,6 +752,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
       case 'hospital':
         return 'Hospitals';
       case 'police':
+      case 'police':
         return 'Police Stations';
       case 'ambulance':
         return 'Ambulance Services';
@@ -763,13 +764,13 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
   Color _getServiceColor() {
     switch (_serviceType.toLowerCase()) {
       case 'hospital':
-        return Colors.red;
+        return Color(0xFF00897B);
       case 'police':
-        return Colors.blue;
+        return Color(0xFF00897B);
       case 'ambulance':
-        return Colors.orange;
+        return Color(0xFF00897B);
       default:
-        return Colors.blue;
+        return Color(0xFF00897B);
     }
   }
 
@@ -798,14 +799,142 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
         return sortBy;
     }
   }
-
+  // void _handleRequesterNotificationTap(RemoteMessage message) {
+  //   final type = message.data['type'];
+  //
+  //   if (!mounted) return;
+  //
+  //   switch (type) {
+  //     case 'offer_received':
+  //     // Navigate to offer approval screen
+  //       Navigator.pushNamed(context, '/offer-approval');
+  //
+  //       // Show snackbar with offer count
+  //       final offerCount = message.data['offerCount'] ?? '1';
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(
+  //           content: Row(
+  //             children: [
+  //               const Icon(Icons.notifications_active, color: Colors.white),
+  //               const SizedBox(width: 12),
+  //               Expanded(
+  //                 child: Text(
+  //                   'You have $offerCount offer(s) to review!',
+  //                   style: const TextStyle(fontWeight: FontWeight.w600),
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //           backgroundColor: const Color(0xFF00897B),
+  //           behavior: SnackBarBehavior.floating,
+  //           action: SnackBarAction(
+  //             label: 'VIEW',
+  //             textColor: Colors.white,
+  //             onPressed: () {
+  //               Navigator.pushNamed(context, '/offer-approval');
+  //             },
+  //           ),
+  //         ),
+  //       );
+  //       break;
+  //
+  //     case 'verification_code':
+  //     // Navigate to approval screen to see verification code
+  //       Navigator.pushNamed(context, '/offer-approval');
+  //
+  //       // Show the code in a dialog
+  //       Future.delayed(const Duration(milliseconds: 300), () {
+  //         if (mounted) {
+  //           showDialog(
+  //             context: context,
+  //             builder: (context) => AlertDialog(
+  //               shape: RoundedRectangleBorder(
+  //                 borderRadius: BorderRadius.circular(16),
+  //               ),
+  //               backgroundColor: Colors.grey[900],
+  //               content: Column(
+  //                 mainAxisSize: MainAxisSize.min,
+  //                 children: [
+  //                   Icon(
+  //                     Icons.lock_outline,
+  //                     size: 48,
+  //                     color: Colors.green[400],
+  //                   ),
+  //                   const SizedBox(height: 16),
+  //                   Text(
+  //                     'Your Verification Code',
+  //                     style: TextStyle(
+  //                       fontSize: 16,
+  //                       fontWeight: FontWeight.bold,
+  //                       color: Colors.green[400],
+  //                     ),
+  //                   ),
+  //                   const SizedBox(height: 20),
+  //                   Container(
+  //                     padding: const EdgeInsets.symmetric(
+  //                       vertical: 16,
+  //                       horizontal: 24,
+  //                     ),
+  //                     decoration: BoxDecoration(
+  //                       color: Colors.white.withOpacity(0.1),
+  //                       borderRadius: BorderRadius.circular(12),
+  //                       border: Border.all(
+  //                         color: Colors.green[400]!.withOpacity(0.5),
+  //                         width: 2,
+  //                       ),
+  //                     ),
+  //                     child: Text(
+  //                       message.data['verificationCode'] ?? '----',
+  //                       style: const TextStyle(
+  //                         color: Colors.white,
+  //                         fontSize: 40,
+  //                         fontWeight: FontWeight.w900,
+  //                         letterSpacing: 16,
+  //                         fontFamily: 'Courier',
+  //                       ),
+  //                     ),
+  //                   ),
+  //                   const SizedBox(height: 16),
+  //                   Text(
+  //                     'Share this with ${message.data['providerName']} when they arrive',
+  //                     textAlign: TextAlign.center,
+  //                     style: TextStyle(
+  //                       fontSize: 12,
+  //                       color: Colors.grey[400],
+  //                     ),
+  //                   ),
+  //                 ],
+  //               ),
+  //               actions: [
+  //                 TextButton(
+  //                   onPressed: () => Navigator.pop(context),
+  //                   child: const Text(
+  //                     'GOT IT',
+  //                     style: TextStyle(color: Colors.white),
+  //                   ),
+  //                 ),
+  //               ],
+  //             ),
+  //           );
+  //         }
+  //       });
+  //       break;
+  //
+  //     default:
+  //     // Generic navigation
+  //       final redirectTo = message.data['redirectTo'];
+  //       if (redirectTo != null && redirectTo.isNotEmpty) {
+  //         Navigator.pushNamed(context, '/$redirectTo');
+  //       }
+  //   }
+  // }
   void _showErrorSnackBar(String message) {
     if (!mounted)
-    return;
+      return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red,
+        backgroundColor: Color(0xFF00897B),
         action: SnackBarAction(
           label: 'Retry',
           textColor: Colors.white,

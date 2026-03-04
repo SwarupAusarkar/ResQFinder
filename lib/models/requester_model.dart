@@ -10,7 +10,8 @@ class requester_model {
   final String alternatePhone;
   final List<EmergencyContact> emergencyContacts;
   final String location;
-  final bool sendSmsPermission; // Removed 'final ... = false' to allow constructor setting
+  final bool sendSmsPermission;
+  final String? fcmToken;
 
   requester_model({
     required this.uid,
@@ -23,6 +24,7 @@ class requester_model {
     required this.medicalNotes,
     required this.location,
     required this.sendSmsPermission,
+    required this.fcmToken,
   });
 
   factory requester_model.fromFirestore(DocumentSnapshot doc) {
@@ -37,9 +39,11 @@ class requester_model {
       medicalNotes: data['medicalNotes'] ?? '',
       location: data['location'] ?? '',
       sendSmsPermission: data['sendSmsPermission'] ?? false,
-      emergencyContacts: (data['emergencyContacts'] as List? ?? [])
-          .map((e) => EmergencyContact.fromMap(e))
-          .toList(),
+      emergencyContacts:
+          (data['emergencyContacts'] as List? ?? [])
+              .map((e) => EmergencyContact.fromMap(e))
+              .toList(),
+      fcmToken: data['fcmToken'] ?? '',
     );
   }
 }

@@ -38,7 +38,7 @@ class ServiceSelectionScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Select Emergency Service'),
-        backgroundColor: Colors.blue,
+        backgroundColor: Color(0xFF00897B),
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
         actions: [
@@ -104,7 +104,7 @@ class ServiceSelectionScreen extends StatelessWidget {
                     subtitle: 'Medical emergencies & treatment',
                     icon: '🏥',
                     serviceType: 'hospital',
-                    color: Colors.red,
+                    color: Color(0xFF00897B),
                     description: 'Emergency rooms, doctors, medical care',
                   ),
                   const SizedBox(height: 16),

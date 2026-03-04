@@ -23,12 +23,11 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
   final _descriptionController = TextEditingController();
   final _latController = TextEditingController();
   final _lonController = TextEditingController();
-  
+
   bool _isLoading = true;
   bool _isSaving = false;
   String _verificationStatus = 'pending';
 
-  // Image handling
   final ImagePicker _picker = ImagePicker();
   String? _existingCertUrl;
   List<String> _existingFacilityUrls = [];
@@ -51,17 +50,17 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
       if (doc.exists) {
         final data = doc.data()!;
         setState(() {
-          _nameController.text = data['name'] ?? ''; 
+          _nameController.text = data['name'] ?? '';
           _phoneController.text = data['phone'] ?? '';
           _addressController.text = data['address'] ?? '';
           _descriptionController.text = data['description'] ?? '';
           _latController.text = data['latitude']?.toString() ?? '';
           _lonController.text = data['longitude']?.toString() ?? '';
           _verificationStatus = data['verificationStatus'] ?? 'pending';
-          
+
           _existingCertUrl = data['certificateUrl'] == '' ? null : data['certificateUrl'];
           _existingFacilityUrls = List<String>.from(data['facilityUrls'] ?? []);
-          
+
           _isLoading = false;
         });
       }
@@ -99,7 +98,16 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
         _latController.text = position.latitude.toStringAsFixed(6);
         _lonController.text = position.longitude.toStringAsFixed(6);
       });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location updated!'), backgroundColor: Colors.green));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location updated!'),
+            backgroundColor: Color(0xFF00897B),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Location error: $e')));
     } finally {
@@ -118,15 +126,13 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
       String? finalCertUrl = _existingCertUrl;
       List<String> finalFacilityUrls = List.from(_existingFacilityUrls);
 
-      // Upload New Certificate
       if (_newCertificateImage != null) {
-        String ext = path.extension(_newCertificateImage!.path); // gets '.pdf' or '.jpg'
+        String ext = path.extension(_newCertificateImage!.path);
         final ref = FirebaseStorage.instance.ref().child('provider_certs/${user.uid}_cert$ext');
         await ref.putFile(_newCertificateImage!);
         finalCertUrl = await ref.getDownloadURL();
       }
 
-      // Upload New Facility Images
       for (int i = 0; i < _newFacilityImages.length; i++) {
         final ref = FirebaseStorage.instance.ref().child('provider_facilities/${user.uid}/fac_img_${DateTime.now().millisecondsSinceEpoch}_$i.jpg');
         await ref.putFile(_newFacilityImages[i]);
@@ -134,7 +140,6 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
         finalFacilityUrls.add(url);
       }
 
-      // Save everything to Firestore
       await FirebaseFirestore.instance.collection('providers').doc(user.uid).update({
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
@@ -147,7 +152,9 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated successfully!'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile updated successfully!'), backgroundColor: Color(0xFF00897B))
+        );
         Navigator.pop(context);
       }
     } catch (e) {
@@ -160,161 +167,184 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit Profile'), backgroundColor: Colors.green, foregroundColor: Colors.white),
+      appBar: AppBar(
+        title: const Text('Edit Provider Profile'),
+        backgroundColor: const Color(0xFF00897B),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF00897B)))
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // VERIFICATION STATUS BANNER
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: _verificationStatus == 'approved' ? Colors.green[100] : Colors.orange[100],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(_verificationStatus == 'approved' ? Icons.check_circle : Icons.pending, 
-                               color: _verificationStatus == 'approved' ? Colors.green : Colors.orange),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _verificationStatus == 'approved' 
-                                  ? 'Your facility is verified and online.' 
-                                  : 'Account pending admin verification. You cannot receive requests yet.',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: _verificationStatus == 'approved' ? Colors.green[800] : Colors.orange[800]),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildVerificationBanner(),
+              const SizedBox(height: 24),
 
-                    // --- DOCUMENT UPLOADS SECTION ---
-                    const Text('Verification Documents', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
-                    const SizedBox(height: 12),
-                    
-                    // Certificate
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Text('Facility Certificate', style: TextStyle(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 8),
-                            if (_existingCertUrl != null && _newCertificateImage == null)
-                            const ListTile(
-                              leading: Icon(Icons.picture_as_pdf, color: Colors.red, size: 40),
-                              title: Text("Certificate Uploaded"),
-                              subtitle: Text("Stored in Database"),
-                            )
-                          else if (_newCertificateImage != null)
-                            ListTile(
-                              leading: const Icon(Icons.upload_file, color: Colors.green, size: 40),
-                              title: Text("New File Selected"),
-                              subtitle: Text(_newCertificateImage!.path.split('/').last),
-                            ),
-                            TextButton.icon(
-                              onPressed: _pickCertificate,
-                              icon: const Icon(Icons.upload_file),
-                              label: const Text('Upload New Certificate'),
-                            )
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
+              const Text('Verification Documents', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00897B))),
+              const SizedBox(height: 12),
+              _buildCertificateCard(),
+              const SizedBox(height: 12),
+              _buildFacilityPhotosCard(),
+              const SizedBox(height: 24),
 
-                    // Facility Photos
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Text('Facility Photos', style: TextStyle(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8, runSpacing: 8,
-                              children: [
-                                // Show existing network images
-                                ..._existingFacilityUrls.map((url) => ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(url, width: 70, height: 70, fit: BoxFit.cover))),
-                                // Show newly picked local images
-                                ..._newFacilityImages.map((file) => Stack(
-                                  alignment: Alignment.topRight,
-                                  children: [
-                                    ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(file, width: 70, height: 70, fit: BoxFit.cover)),
-                                    GestureDetector(
-                                      onTap: () => setState(() => _newFacilityImages.remove(file)),
-                                      child: Container(decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white), child: const Icon(Icons.cancel, color: Colors.red, size: 20)),
-                                    )
-                                  ],
-                                )),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            TextButton.icon(
-                              onPressed: _pickFacilityImages,
-                              icon: const Icon(Icons.add_a_photo),
-                              label: const Text('Add More Photos'),
-                            )
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
+              const Text('Basic Information', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00897B))),
+              const SizedBox(height: 12),
+              _buildTextField(_nameController, 'Facility Name', Icons.business),
+              const SizedBox(height: 16),
+              _buildTextField(_phoneController, 'Contact Number', Icons.phone, type: TextInputType.phone),
+              const SizedBox(height: 16),
+              _buildTextField(_addressController, 'Physical Address', Icons.location_on, maxLines: 2),
+              const SizedBox(height: 16),
+              _buildTextField(_descriptionController, 'Services Description', Icons.description, maxLines: 3),
+              const SizedBox(height: 24),
 
-                    // --- BASIC INFO SECTION ---
-                    const Text('Basic Information', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
-                    const SizedBox(height: 12),
-                    TextFormField(controller: _nameController, decoration: InputDecoration(labelText: 'Provider Name', prefixIcon: const Icon(Icons.business), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))), validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
-                    const SizedBox(height: 16),
-                    TextFormField(controller: _phoneController, keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: 'Phone Number', prefixIcon: const Icon(Icons.phone), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))), validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
-                    const SizedBox(height: 16),
-                    TextFormField(controller: _addressController, maxLines: 2, decoration: InputDecoration(labelText: 'Address', prefixIcon: const Icon(Icons.location_on), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))), validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
-                    const SizedBox(height: 16),
-                    TextFormField(controller: _descriptionController, maxLines: 3, decoration: InputDecoration(labelText: 'Description', prefixIcon: const Icon(Icons.description), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
-                    const SizedBox(height: 24),
+              _buildLocationSection(),
+              const SizedBox(height: 32),
 
-                    // --- LOCATION SECTION ---
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue[200]!)),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(children: [Icon(Icons.my_location, color: Colors.blue[700]), const SizedBox(width: 8), Text('Location', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue[700]))]),
-                          const SizedBox(height: 12),
-                          ElevatedButton.icon(onPressed: _isSaving ? null : _updateLocation, icon: const Icon(Icons.gps_fixed), label: const Text('Update Current Location'), style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 45))),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(child: TextFormField(controller: _latController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Latitude', border: OutlineInputBorder(), isDense: true), validator: (v) => v?.isEmpty ?? true ? 'Required' : null)),
-                              const SizedBox(width: 12),
-                              Expanded(child: TextFormField(controller: _lonController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Longitude', border: OutlineInputBorder(), isDense: true), validator: (v) => v?.isEmpty ?? true ? 'Required' : null)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 32),
+              _buildSaveButton(),
+              const SizedBox(height: 40),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-                    ElevatedButton(
-                      onPressed: _isSaving ? null : _saveProfile,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                      child: _isSaving ? const CircularProgressIndicator(color: Colors.white) : const Text('Save Changes & Upload', style: TextStyle(fontSize: 16)),
-                    ),
-                    const SizedBox(height: 40),
-                  ],
-                ),
-              ),
+  // --- UI Component Helpers ---
+
+  Widget _buildVerificationBanner() {
+    bool isApproved = _verificationStatus == 'approved';
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isApproved ? Colors.green[50] : Colors.orange[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isApproved ? Colors.green[200]! : Colors.orange[200]!),
+      ),
+      child: Row(
+        children: [
+          Icon(isApproved ? Icons.verified_user : Icons.pending_actions,
+              color: isApproved ? Colors.green[700] : Colors.orange[700]),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              isApproved ? 'Your facility is verified.' : 'Verification pending. You will appear online once approved.',
+              style: TextStyle(fontWeight: FontWeight.w600, color: isApproved ? Colors.green[900] : Colors.orange[900]),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {TextInputType type = TextInputType.text, int maxLines = 1}) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: type,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: const Color(0xFF00897B)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF00897B), width: 2)),
+      ),
+      validator: (v) => v?.isEmpty ?? true ? 'This field is required' : null,
+    );
+  }
+
+  Widget _buildCertificateCard() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            if (_newCertificateImage != null)
+              ListTile(leading: const Icon(Icons.file_present, color: Colors.green), title: Text(_newCertificateImage!.path.split('/').last))
+            else if (_existingCertUrl != null)
+              const ListTile(leading: Icon(Icons.check_circle, color: Color(0xFF00897B)), title: Text("Certificate Uploaded")),
+            TextButton.icon(onPressed: _pickCertificate, icon: const Icon(Icons.upload_file), label: const Text('Update Certificate')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFacilityPhotosCard() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Wrap(
+              spacing: 8, runSpacing: 8,
+              children: [
+                ..._existingFacilityUrls.map((url) => _buildPhotoThumbnail(Image.network(url, fit: BoxFit.cover))),
+                ..._newFacilityImages.map((file) => _buildPhotoThumbnail(Image.file(file, fit: BoxFit.cover), onRemove: () => setState(() => _newFacilityImages.remove(file)))),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(onPressed: _pickFacilityImages, icon: const Icon(Icons.add_a_photo), label: const Text('Add Facility Photos')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhotoThumbnail(Widget child, {VoidCallback? onRemove}) {
+    return Stack(
+      alignment: Alignment.topRight,
+      children: [
+        ClipRRect(borderRadius: BorderRadius.circular(8), child: SizedBox(width: 70, height: 70, child: child)),
+        if (onRemove != null)
+          GestureDetector(onTap: onRemove, child: const CircleAvatar(radius: 10, backgroundColor: Colors.white, child: Icon(Icons.close, size: 14, color: Colors.red))),
+      ],
+    );
+  }
+
+  Widget _buildLocationSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.teal[50], borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        children: [
+          ElevatedButton.icon(
+            onPressed: _updateLocation,
+            icon: const Icon(Icons.my_location),
+            label: const Text('Sync Current GPS'),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00897B), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 45)),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: TextFormField(controller: _latController, decoration: const InputDecoration(labelText: 'Lat', isDense: true))),
+              const SizedBox(width: 12),
+              Expanded(child: TextFormField(controller: _lonController, decoration: const InputDecoration(labelText: 'Lon', isDense: true))),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSaveButton() {
+    return ElevatedButton(
+      onPressed: _isSaving ? null : _saveProfile,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF00897B),
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      child: _isSaving ? const CircularProgressIndicator(color: Colors.white) : const Text('SAVE CHANGES', style: TextStyle(fontWeight: FontWeight.bold)),
     );
   }
 }
