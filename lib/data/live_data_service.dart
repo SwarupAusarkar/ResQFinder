@@ -114,7 +114,8 @@ class LiveDataService {
               inventory: [],
               noOfApprovedRequests: 0,
               verificationType: '',
-              fcmToken: '', // OSM data won't have inventory
+              fcmToken: '',
+               // OSM data won't have inventory
             );
           }),
         );

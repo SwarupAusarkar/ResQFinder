@@ -1,6 +1,9 @@
+import 'package:emergency_res_loc_new/models/reviews.dart';
+import 'package:emergency_res_loc_new/widgets/ReviewDialog.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/request_model.dart';
+import '../services/ReviewService.dart';
 import '../services/auth_service.dart';
 import 'package:intl/intl.dart';
 
@@ -22,6 +25,43 @@ class _RequesterHistoryScreenState extends State<RequesterHistoryScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
   }
+  Future<bool> _hasBeenReviewed(String requestId) async {
+    try {
+      final reviewSnapshot = await firestore
+          .collection('reviews')
+          .where('requestId', isEqualTo: requestId)
+          .where('requesterId', isEqualTo: user?.uid)
+          .limit(1)
+          .get();
+
+      return reviewSnapshot.docs.isNotEmpty;
+    } catch (e) {
+      print('Error checking review status: $e');
+      return false;
+    }
+  }
+  void _openReviewFlow(EmergencyRequest request) {
+    try {
+      // Find the confirmed provider's offer to get their name
+      final winner = request.offers.firstWhere(
+            (o) => o.providerId == request.confirmedProviderId,
+      );
+
+      showDialog(
+        context: context,
+        builder: (context) => ReviewDialog(
+          providerId: request.confirmedProviderId!,
+          providerName: winner.providerName,
+          requesterId: user?.uid ?? '',
+          requestId: request.id,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Could not load provider details for review.")),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,9 +82,15 @@ class _RequesterHistoryScreenState extends State<RequesterHistoryScreen>
           indicatorWeight: 3,
           labelColor: Colors.redAccent,
           unselectedLabelColor: Colors.grey,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
           tabs: const [
-            Tab(text: "ACTIVE REQUESTS", icon: Icon(Icons.bolt_rounded, size: 20)),
+            Tab(
+              text: "ACTIVE REQUESTS",
+              icon: Icon(Icons.bolt_rounded, size: 20),
+            ),
             Tab(text: "PAST LOGS", icon: Icon(Icons.history_rounded, size: 20)),
           ],
         ),
@@ -53,7 +99,11 @@ class _RequesterHistoryScreenState extends State<RequesterHistoryScreen>
         controller: _tabController,
         children: [
           _buildRequestList(['pending', 'confirmed']),
-          _buildRequestList(['completed', 'expired_or_declined', 'expired_handshake']),
+          _buildRequestList([
+            'completed',
+            'expired_or_declined',
+            'expired_handshake',
+          ]),
         ],
       ),
     );
@@ -61,15 +111,21 @@ class _RequesterHistoryScreenState extends State<RequesterHistoryScreen>
 
   Widget _buildRequestList(List<String> statuses) {
     return StreamBuilder<QuerySnapshot>(
-      stream: firestore
-          .collection('emergency_requests')
-          .where('requesterId', isEqualTo: user?.uid)
-          .where('status', whereIn: statuses)
-          .orderBy('timestamp', descending: true)
-          .snapshots(),
+      stream:
+          firestore
+              .collection('emergency_requests')
+              .where('requesterId', isEqualTo: user?.uid)
+              .where('status', whereIn: statuses)
+              .orderBy('timestamp', descending: true)
+              .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(child: Text("Sync Error: Check Connection", style: TextStyle(color: Colors.red[300])));
+          return Center(
+            child: Text(
+              "Sync Error: Check Connection",
+              style: TextStyle(color: Colors.red[300]),
+            ),
+          );
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -79,18 +135,24 @@ class _RequesterHistoryScreenState extends State<RequesterHistoryScreen>
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return _buildEmptyState();
 
-        final requests = docs.map((doc) => EmergencyRequest.fromFirestore(doc)).toList();
+        final requests =
+            docs.map((doc) => EmergencyRequest.fromFirestore(doc)).toList();
 
         return ListView.builder(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           itemCount: requests.length,
-          itemBuilder: (context, index) => _buildEnhancedHistoryCard(context, requests[index]),
+          itemBuilder:
+              (context, index) =>
+                  _buildEnhancedHistoryCard(context, requests[index]),
         );
       },
     );
   }
 
-  Widget _buildEnhancedHistoryCard(BuildContext context, EmergencyRequest request) {
+  Widget _buildEnhancedHistoryCard(
+    BuildContext context,
+    EmergencyRequest request,
+  ) {
     bool isConfirmed = request.status == 'confirmed';
     bool isCompleted = request.status == 'completed';
 
@@ -100,7 +162,11 @@ class _RequesterHistoryScreenState extends State<RequesterHistoryScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: ClipRRect(
@@ -111,7 +177,11 @@ class _RequesterHistoryScreenState extends State<RequesterHistoryScreen>
           leading: _getModernStatusIcon(request.status),
           title: Text(
             "${request.itemQuantity} ${request.itemUnit} ${request.itemName}",
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF1A1A1A)),
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              color: Color(0xFF1A1A1A),
+            ),
           ),
           subtitle: Text(
             DateFormat('MMM dd • hh:mm a').format(request.timestamp),
@@ -124,18 +194,86 @@ class _RequesterHistoryScreenState extends State<RequesterHistoryScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (isConfirmed) _buildVerificationBanner(request.verificationCode ?? "---"),
+                  if (isConfirmed)
+                    _buildVerificationBanner(request.verificationCode ?? "---"),
                   const SizedBox(height: 16),
                   _buildSectionTitle("EVENT DETAILS"),
-                  _detailRow(Icons.description_outlined, "Purpose", request.description),
-                  _detailRow(Icons.location_on_outlined, "Location", request.locationName),
+                  _detailRow(
+                    Icons.description_outlined,
+                    "Purpose",
+                    request.description,
+                  ),
+                  _detailRow(
+                    Icons.location_on_outlined,
+                    "Location",
+                    request.locationName,
+                  ),
                   const Divider(height: 32, thickness: 0.8),
                   _buildSectionTitle("VERIFIED PROVIDER"),
                   if (request.confirmedProviderId != null)
                     _buildProviderCard(request)
                   else
-                    const Text("Waiting for a local provider to accept...",
-                        style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey, fontSize: 12)),
+                    const Text(
+                      "Waiting for a local provider to accept...",
+                      style: TextStyle(
+                        fontStyle: FontStyle.italic,
+                        color: Colors.grey,
+                        fontSize: 12,
+                      ),
+                    ),
+                  if (isCompleted) ...[
+                    const SizedBox(height: 16),
+                    // Check if already reviewed
+                    FutureBuilder<bool>(
+                      future: _hasBeenReviewed(request.id),
+                      builder: (context, snapshot) {
+                        final hasReviewed = snapshot.data ?? false;
+
+                        if (hasReviewed || request.isReviewed == true) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.green[50],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.green[200]!),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.check_circle, color: Colors.green[700], size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  "Review Submitted - Thank You!",
+                                  style: TextStyle(
+                                    color: Colors.green[700],
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        return SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _openReviewFlow(request),
+                            icon: const Icon(Icons.star_rounded, size: 18),
+                            label: const Text("RATE THIS PROVIDER"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00897B),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                   if (isConfirmed) ...[
                     const SizedBox(height: 16),
                     _buildSafetyWarning(),
@@ -154,14 +292,32 @@ class _RequesterHistoryScreenState extends State<RequesterHistoryScreen>
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF43A047), Color(0xFF2E7D32)]),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
+        ),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text("SECURE OTP", style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
-          Text(code, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 6)),
+          const Text(
+            "SECURE OTP",
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1,
+            ),
+          ),
+          Text(
+            code,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 6,
+            ),
+          ),
         ],
       ),
     );
@@ -169,7 +325,9 @@ class _RequesterHistoryScreenState extends State<RequesterHistoryScreen>
 
   Widget _buildProviderCard(EmergencyRequest request) {
     try {
-      final winner = request.offers.firstWhere((o) => o.providerId == request.confirmedProviderId);
+      final winner = request.offers.firstWhere(
+        (o) => o.providerId == request.confirmedProviderId,
+      );
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -179,29 +337,58 @@ class _RequesterHistoryScreenState extends State<RequesterHistoryScreen>
         ),
         child: Row(
           children: [
-            const CircleAvatar(backgroundColor: Colors.white, radius: 18, child: Icon(Icons.medical_services_rounded, color: Colors.blue, size: 18)),
+            const CircleAvatar(
+              backgroundColor: Colors.white,
+              radius: 18,
+              child: Icon(
+                Icons.medical_services_rounded,
+                color: Colors.blue,
+                size: 18,
+              ),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(winner.providerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  Text(winner.providerPhone, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                  Text(
+                    winner.providerName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    winner.providerPhone,
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  ),
                 ],
               ),
             ),
-            if (request.status == 'completed') const Icon(Icons.verified, color: Colors.blue, size: 20),
+            if (request.status == 'completed')
+              const Icon(Icons.verified, color: Colors.blue, size: 20),
           ],
         ),
       );
     } catch (_) {
-      return const Text("Provider details archived.", style: TextStyle(color: Colors.grey, fontSize: 11));
+      return const Text(
+        "Provider details archived.",
+        style: TextStyle(color: Colors.grey, fontSize: 11),
+      );
     }
   }
 
   Widget _buildSectionTitle(String title) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
-    child: Text(title, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.grey[400], letterSpacing: 1.5)),
+    child: Text(
+      title,
+      style: TextStyle(
+        fontSize: 9,
+        fontWeight: FontWeight.w900,
+        color: Colors.grey[400],
+        letterSpacing: 1.5,
+      ),
+    ),
   );
 
   Widget _detailRow(IconData icon, String label, String value) => Padding(
@@ -211,37 +398,78 @@ class _RequesterHistoryScreenState extends State<RequesterHistoryScreen>
       children: [
         Icon(icon, size: 14, color: Colors.redAccent.withOpacity(0.7)),
         const SizedBox(width: 10),
-        Expanded(child: Text("$label: $value", style: const TextStyle(fontSize: 13, height: 1.4, color: Color(0xFF4A4A4A)))),
+        Expanded(
+          child: Text(
+            "$label: $value",
+            style: const TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: Color(0xFF4A4A4A),
+            ),
+          ),
+        ),
       ],
     ),
   );
 
   Widget _buildModernStatusChip(String status) {
-    Color color = status == 'confirmed' ? Colors.green : (status == 'pending' ? Colors.orange : Colors.blue);
+    Color color =
+        status == 'confirmed'
+            ? Colors.green
+            : (status == 'pending' ? Colors.orange : Colors.blue);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-      child: Text(status.toUpperCase(), style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w800)),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 
   Widget _getModernStatusIcon(String status) {
     switch (status) {
-      case 'completed': return const Icon(Icons.check_circle_rounded, color: Colors.blue);
-      case 'confirmed': return const Icon(Icons.handshake_rounded, color: Colors.green);
-      default: return const Icon(Icons.radio_button_checked_rounded, color: Colors.orange);
+      case 'completed':
+        return const Icon(Icons.check_circle_rounded, color: Colors.blue);
+      case 'confirmed':
+        return const Icon(Icons.handshake_rounded, color: Colors.green);
+      default:
+        return const Icon(
+          Icons.radio_button_checked_rounded,
+          color: Colors.orange,
+        );
     }
   }
 
   Widget _buildSafetyWarning() => Container(
     padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(10)),
-    child: Row(children: [
-      Icon(Icons.security_rounded, size: 16, color: Colors.amber[800]),
-      const SizedBox(width: 10),
-      const Expanded(child: Text("Only reveal your Secure OTP once the provider is physically present with the items.",
-          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF5D4037)))),
-    ]),
+    decoration: BoxDecoration(
+      color: Colors.amber[50],
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.security_rounded, size: 16, color: Colors.amber[800]),
+        const SizedBox(width: 10),
+        const Expanded(
+          child: Text(
+            "Only reveal your Secure OTP once the provider is physically present with the items.",
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF5D4037),
+            ),
+          ),
+        ),
+      ],
+    ),
   );
 
   Widget _buildEmptyState() => Center(
@@ -250,7 +478,15 @@ class _RequesterHistoryScreenState extends State<RequesterHistoryScreen>
       children: [
         Icon(Icons.assignment_late_outlined, size: 80, color: Colors.grey[200]),
         const SizedBox(height: 16),
-        Text("NO LOGS FOUND", style: TextStyle(color: Colors.grey[400], letterSpacing: 2, fontWeight: FontWeight.w900, fontSize: 12)),
+        Text(
+          "NO LOGS FOUND",
+          style: TextStyle(
+            color: Colors.grey[400],
+            letterSpacing: 2,
+            fontWeight: FontWeight.w900,
+            fontSize: 12,
+          ),
+        ),
       ],
     ),
   );

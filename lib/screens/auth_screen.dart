@@ -663,6 +663,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../services/auth_service.dart';
+import 'OTP_verification_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -776,7 +777,18 @@ class _AuthScreenState extends State<AuthScreen> {
       onCodeSent: (verificationId, resendToken) {
         if (mounted) {
           setState(() => _isLoading = false);
-          _showOtpDialog(verificationId, userType, isLogin: false);
+          // Navigator.push(
+          //   context,
+          //   MaterialPageRoute(
+          //     builder: (_) => OtpVerificationScreen(
+          //       verificationId: verificationId,
+          //       isLogin: false,
+          //       userType: userType,
+          //       formattedPhone: _formattedPhone,
+          //     ),
+          //   ),
+          // );
+           _showOtpDialog(verificationId, userType, isLogin: false);
         }
       },
       onVerificationFailed: (e) => _onAuthError(e.message),
@@ -790,35 +802,234 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  void _showOtpDialog(String verificationId, String? userType, {required bool isLogin}) {
+  void _showOtpDialog(
+      String verificationId,
+      String? userType, {
+        required bool isLogin,
+      }) {
     final otpController = TextEditingController();
-    showDialog(
+    bool isVerifying = false;
+
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text(isLogin ? "Login OTP" : "Verify Phone"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text("Enter code sent to $_formattedPhone"),
-            const SizedBox(height: 16),
-            TextField(controller: otpController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "OTP Code", border: OutlineInputBorder())),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              if (isLogin) {
-                _finalizePhoneLogin(verificationId, otpController.text.trim());
-              } else {
-                _finalizeRegistration(verificationId, otpController.text.trim(), userType!);
-              }
-            },
-            child: Text("Verify"),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Container(
+          height: MediaQuery.of(context).size.height * 0.6,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-        ],
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                /// Drag Indicator
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                /// Icon + Loader
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    if (isVerifying)
+                      const SizedBox(
+                        width: 80,
+                        height: 80,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFF00897B),
+                          ),
+                        ),
+                      ),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00897B).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.sms_outlined,
+                        size: 40,
+                        color: Color(0xFF00897B),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                /// Title
+                Text(
+                  isLogin ? 'Login OTP' : 'Verify Phone',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                /// Subtitle
+                Text(
+                  'Enter the 6-digit code sent to $_formattedPhone',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                /// OTP Field
+                TextField(
+                  controller: otpController,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  maxLength: 6,
+                  enabled: !isVerifying,
+                  style: const TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 16,
+                  ),
+                  decoration: InputDecoration(
+                    counterText: '',
+                    hintText: '------',
+                    hintStyle: TextStyle(
+                      color: Colors.grey[300],
+                      letterSpacing: 16,
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[50],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                      BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF00897B),
+                        width: 2,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      vertical: 20,
+                      horizontal: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                /// Verify Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: isVerifying
+                        ? null
+                        : () async {
+                      if (otpController.text.trim().length != 6) {
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(
+                          const SnackBar(
+                            content:
+                            Text('Please enter 6-digit code'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      setState(() => isVerifying = true);
+
+                      Navigator.pop(context);
+
+                      if (isLogin) {
+                        await _finalizePhoneLogin(
+                          verificationId,
+                          otpController.text.trim(),
+                        );
+                      } else {
+                        await _finalizeRegistration(
+                          verificationId,
+                          otpController.text.trim(),
+                          userType!,
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00897B),
+                      disabledBackgroundColor:
+                      Colors.grey[300],
+                      padding:
+                      const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                        BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: isVerifying
+                        ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor:
+                        AlwaysStoppedAnimation<Color>(
+                            Colors.white),
+                      ),
+                    )
+                        : const Text(
+                      'VERIFY CODE',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                /// Cancel
+                TextButton(
+                  onPressed:
+                  isVerifying ? null : () => Navigator.pop(context),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: isVerifying
+                          ? Colors.grey
+                          : const Color(0xFF00897B),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import '../widgets/requestCard.dart';
 import 'provider_profile_edit_screen.dart';
 import '../services/expiration_logic_service.dart';
+
 class ProviderDashboardScreen extends StatefulWidget {
   const ProviderDashboardScreen({super.key, required String initialTab});
 
@@ -241,7 +242,7 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
             ],
           ),
           IconButton(
-            icon: const Icon(Icons.edit),
+            icon: const Icon(Icons.person),
             onPressed:
                 () => Navigator.push(
                   context,
@@ -272,148 +273,146 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
           if (_isProcessing)
             const LinearProgressIndicator(color: Color(0xFF00897B)),
           Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream:
-                    _firestore
-                        .collection('emergency_requests')
-                        .snapshots(), // ✅ Fetch all statuses
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+            child: StreamBuilder<QuerySnapshot>(
+              stream:
+                  _firestore
+                      .collection('emergency_requests')
+                      .snapshots(), // ✅ Fetch all statuses
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                  final userId = user.uid;
+                final userId = user.uid;
 
-                  var requests =
-                      snapshot.data!.docs
-                          .map((doc) {
-                            ExpirationLogicService.checkAndExpireRequest(doc);
-                            return EmergencyRequest.fromFirestore(doc);
-                          })
-                          .where((req) {
-                            final bool hasOffered = req.offers.any(
-                              (o) => o.providerId == userId,
-                            );
-
-                            final bool notDeclined =
-                                !req.declinedBy.contains(userId);
-
-                            switch (_selectedFilter) {
-                              case 'new':
-                                // Only pending requests
-                                // I have not offered
-                                // I have not declined
-                                return req.status == 'pending' &&
-                                    !hasOffered &&
-                                    notDeclined;
-
-                              case 'my_offers':
-                                // I have offered
-                                // Still active (not completed)
-                                return hasOffered &&
-                                    (req.status == 'pending' ||
-                                        req.status == 'confirmed');
-
-                              case 'history':
-                                // Only completed requests where I was involved
-                                return hasOffered && req.status == 'completed';
-
-                              default:
-                                return false;
-                            }
-                          })
-                          .toList();
-
-                  // Apply time filter
-                  requests =
-                      requests
-                          .where((r) => _matchesTimeFilter(r.timestamp))
-                          .toList();
-
-                  // Sort latest first
-                  requests.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-                  if (requests.isEmpty) {
-                    return _buildEmptyState(
-                      icon: Icons.search_off,
-                      title: 'No Requests',
-                      subtitle: _getEmptySubtitle(),
-                    );
-                  }
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: requests.length,
-                    itemBuilder: (context, index) {
-                      final req = requests[index];
-                      final bool hasOffered = req.offers.any(
-                        (o) => o.providerId == userId,
-                      );
-
-                      final bool isWinner =
-                          req.status == 'confirmed' &&
-                          req.confirmedProviderId == userId;
-
-                      return RequestCard(
-                        request: req,
-
-                        // Accept only in New tab
-                        onAccept:
-                            (_selectedFilter == 'new')
-                                ? () => _acceptRequest(req)
-                                : null,
-
-                        // Decline only in New tab
-                        onDecline:
-                            (_selectedFilter == 'new')
-                                ? () => _firestore
-                                    .collection('emergency_requests')
-                                    .doc(req.id)
-                                    .update({
-                                      'declinedBy': FieldValue.arrayUnion([
-                                        userId,
-                                      ]),
-                                    })
-                                : null,
-
-                        // Verify only if confirmed winner
-                        onVerify: (req.status == 'confirmed' &&
-                            req.confirmedProviderId == userId)
-                            ? (code) async {
-                          final handshakeService =
-                          HandshakeService();
-
-                          final result =
-                          await handshakeService
-                              .verifyAndCompleteRequest(
-                            requestId: req.id,
-                            providerInputCode: code,
+                var requests =
+                    snapshot.data!.docs
+                        .map((doc) {
+                          ExpirationLogicService.checkAndExpireRequest(doc);
+                          return EmergencyRequest.fromFirestore(doc);
+                        })
+                        .where((req) {
+                          final bool hasOffered = req.offers.any(
+                            (o) => o.providerId == userId,
                           );
 
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(
-                            SnackBar(
-                              content: Text(result['message']),
-                              backgroundColor:
-                              result['success']
-                                  ? Colors.green
-                                  : Colors.red,
-                            ),
-                          );
+                          final bool notDeclined =
+                              !req.declinedBy.contains(userId);
 
-                          if (result['success']) {
-                            setState(() {
-                              _selectedFilter = 'history';
-                            });
+                          switch (_selectedFilter) {
+                            case 'new':
+                              // Only pending requests
+                              // I have not offered
+                              // I have not declined
+                              return req.status == 'pending' &&
+                                  !hasOffered &&
+                                  notDeclined;
+
+                            case 'my_offers':
+                              // I have offered
+                              // Still active (not completed)
+                              return hasOffered &&
+                                  (req.status == 'pending' ||
+                                      req.status == 'confirmed');
+
+                            case 'history':
+                              // Only completed requests where I was involved
+                              return hasOffered && req.status == 'completed';
+
+                            default:
+                              return false;
                           }
-                        }
-                            : null,
-                      );
-                    },
+                        })
+                        .toList();
+
+                // Apply time filter
+                requests =
+                    requests
+                        .where((r) => _matchesTimeFilter(r.timestamp))
+                        .toList();
+
+                // Sort latest first
+                requests.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+                if (requests.isEmpty) {
+                  return _buildEmptyState(
+                    icon: Icons.search_off,
+                    title: 'No Requests',
+                    subtitle: _getEmptySubtitle(),
                   );
-                },
-              ),
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: requests.length,
+                  itemBuilder: (context, index) {
+                    final req = requests[index];
+                    final bool hasOffered = req.offers.any(
+                      (o) => o.providerId == userId,
+                    );
+
+                    final bool isWinner =
+                        req.status == 'confirmed' &&
+                        req.confirmedProviderId == userId;
+
+                    return RequestCard(
+                      request: req,
+
+                      // Accept only in New tab
+                      onAccept:
+                          (_selectedFilter == 'new')
+                              ? () => _acceptRequest(req)
+                              : null,
+
+                      // Decline only in New tab
+                      onDecline:
+                          (_selectedFilter == 'new')
+                              ? () => _firestore
+                                  .collection('emergency_requests')
+                                  .doc(req.id)
+                                  .update({
+                                    'declinedBy': FieldValue.arrayUnion([
+                                      userId,
+                                    ]),
+                                  })
+                              : null,
+
+                      // Verify only if confirmed winner
+                      onVerify:
+                          (req.status == 'confirmed' &&
+                                  req.confirmedProviderId == userId)
+                              ? (code) async {
+                                final handshakeService = HandshakeService();
+
+                                final result = await handshakeService
+                                    .verifyAndCompleteRequest(
+                                      requestId: req.id,
+                                      providerInputCode: code,
+                                    );
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(result['message']),
+                                    backgroundColor:
+                                        result['success']
+                                            ? Colors.green
+                                            : Colors.red,
+                                  ),
+                                );
+
+                                if (result['success']) {
+                                  setState(() {
+                                    _selectedFilter = 'history';
+                                  });
+                                }
+                              }
+                              : null,
+                    );
+                  },
+                );
+              },
             ),
+          ),
         ],
       ),
     );
