@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/requester_model.dart';
 import '../services/auth_service.dart';
 import '../services/location_service.dart';
+import 'offline_region_picker_screen.dart';
 
 class RequesterProfileScreen extends StatefulWidget {
   const RequesterProfileScreen({super.key});
@@ -14,6 +15,7 @@ class RequesterProfileScreen extends StatefulWidget {
 }
 
 class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
+  List<Map<String, dynamic>> _savedLocations = [];
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
@@ -34,47 +36,50 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
   }
 
   Future<void> _loadUserData() async {
-    final user = AuthService().currentUser;
-    if (user == null) return;
+  final user = AuthService().currentUser;
+  if (user == null) return;
 
-    try {
-      // Get Location
-      final pos = await LocationService.getCurrentLocation();
-      if (pos != null) {
-        location = await LocationService.getAddressFromLatLng(pos.latitude, pos.longitude);
-      }
-
-      // CHANGED: Reading from 'requesters' collection
-      final doc = await FirebaseFirestore.instance.collection('requesters').doc(user.uid).get();
+  try {
+    // 1. First, fetch the document
+    final doc = await FirebaseFirestore.instance.collection('requesters').doc(user.uid).get();
+    
+    if (doc.exists && doc.data() != null) {
+      final data = doc.data() as Map<String, dynamic>;
       
-      if (doc.exists && doc.data() != null) {
-        final data = doc.data() as Map<String, dynamic>;
+      // 2. Use setState to ensure the UI reacts to the new data
+      setState(() {
+        // We use .from() and explicitly map to ensures types are correct for Flutter
+        if (data['savedLocations'] != null) {
+          final List<dynamic> rawList = data['savedLocations'];
+          _savedLocations = rawList.map((item) => Map<String, dynamic>.from(item)).toList();
+        } else {
+          _savedLocations = [];
+        }
+
+        // Keep your existing profile fields here...
+        _nameController.text = data['name'] ?? '';
+        _phoneController.text = data['phone'] ?? '';
+        _medicalController.text = data['medicalNotes'] ?? '';
+        _sendSmsPermission = data['sendSmsPermission'] ?? false;
+        String bType = data['bloodGrp'] ?? 'Unknown';
+        _selectedBloodType = _bloodTypes.contains(bType) ? bType : 'Unknown';
         
-        setState(() {
-          _nameController.text = data['name'] ?? '';
-          _phoneController.text = data['phone'] ?? '';
-          _medicalController.text = data['medicalNotes'] ?? '';
-          _sendSmsPermission = data['sendSmsPermission'] ?? false;
-          
-          String bType = data['bloodGrp'] ?? 'Unknown';
-          _selectedBloodType = _bloodTypes.contains(bType) ? bType : 'Unknown';
-          
-          if (data['emergencyContacts'] != null) {
-            _emergencyChecklist = (data['emergencyContacts'] as List).map((e) {
-              return EmergencyContact(
-                name: e['name'] ?? '',
-                phone: e['phone'] ?? '',
-              )..isSelected = e['isSelected'] ?? true;
-            }).toList();
-          }
-        });
-      }
-    } catch (e) {
-      debugPrint("Error loading profile: $e");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+        if (data['emergencyContacts'] != null) {
+          _emergencyChecklist = (data['emergencyContacts'] as List).map((e) {
+            return EmergencyContact(
+              name: e['name'] ?? '',
+              phone: e['phone'] ?? '',
+            )..isSelected = e['isSelected'] ?? true;
+          }).toList();
+        }
+      });
     }
+  } catch (e) {
+    debugPrint("Error loading profile data: $e");
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
+}
 
   Future<void> _pickAndSearchContact() async {
     var status = await Permission.contacts.request();
@@ -121,13 +126,11 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
     if (user == null) return;
 
     try {
-      // CHANGED: Saving to 'requesters' collection
       await FirebaseFirestore.instance.collection('requesters').doc(user.uid).set({
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
         'bloodGrp': _selectedBloodType,
         'medicalNotes': _medicalController.text.trim(),
-        // Map list of objects back to JSON
         'emergencyContacts': _emergencyChecklist.map((e) => {
           'name': e.name,
           'phone': e.phone,
@@ -136,7 +139,7 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
         'sendSmsPermission': _sendSmsPermission,
         'location': location,
         'updatedAt': FieldValue.serverTimestamp(),
-        'profileComplete': true, // Keep this flag true
+        'profileComplete': true, 
       }, SetOptions(merge: true));
 
       if (mounted) {
@@ -167,6 +170,7 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
               _buildTextField(_phoneController, "Primary Phone", Icons.phone, isPhone: true),
             ]),
             const SizedBox(height: 24),
+            
             _buildSectionHeader("CRITICAL MEDICAL INFO"),
             _buildCard([
               _buildBloodTypeDropdown(),
@@ -174,6 +178,7 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
               _buildTextField(_medicalController, "Allergies / Conditions", Icons.medical_services, maxLines: 3),
             ]),
             const SizedBox(height: 24),
+            
             _buildSectionHeader("EMERGENCY SETTINGS"),
             _buildCard([
               SwitchListTile(
@@ -185,6 +190,7 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
               ),
             ]),
             const SizedBox(height: 24),
+            
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -193,6 +199,45 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
               ],
             ),
             _buildEmergencyContactList(),
+
+            // --- NEW: SAVED OFFLINE REGIONS ---
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildSectionHeader("SAVED OFFLINE REGIONS"),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const OfflineRegionPickerScreen())).then((_) => _loadUserData());
+                  }, 
+                  icon: const Icon(Icons.add_location_alt), 
+                  label: const Text("Add Trip")
+                )
+              ],
+            ),
+            if (_savedLocations.isEmpty)
+              const Card(child: Padding(padding: EdgeInsets.all(16.0), child: Text("No offline regions saved. Add a trip if you are heading to a low-network area.", style: TextStyle(color: Colors.grey)))),
+            ..._savedLocations.map((loc) => Card(
+              child: ListTile(
+                leading: const Icon(Icons.offline_pin, color: Colors.blue),
+                title: Text(loc['name'] ?? 'Saved Trip', style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text("Radius: ${loc['radius']} km"),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: () async {
+                    final user = AuthService().currentUser;
+                    if (user != null) {
+                      await FirebaseFirestore.instance.collection('requesters').doc(user.uid).update({
+                        'savedLocations': FieldValue.arrayRemove([loc])
+                      });
+                      _loadUserData(); 
+                    }
+                  },
+                ),
+              ),
+            )),
+            const SizedBox(height: 40),
+            // ------------------------------------
           ],
         ),
       ),

@@ -2,9 +2,9 @@
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/provider_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/inventory_item_model.dart'; // Import the new model
 
 class LiveDataService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -17,16 +17,16 @@ class LiveDataService {
     required double longitude,
   }) async {
     try {
+      // FIX: Changed 'users' to 'providers'
       final query = _firestore
-          .collection('users')
-          .where('userType', isEqualTo: 'provider') // Corrected from 'role'
+          .collection('providers') 
           .where('profileComplete', isEqualTo: true)
+          .where('verificationStatus', isEqualTo: 'approved') // Only get verified ones!
           .where('inventory.name', arrayContains: service);
 
       final querySnapshot = await query.get();
       
       return querySnapshot.docs.map((doc) {
-        final data = doc.data();
         return Provider.fromJson(doc.id, doc.data() as Map<String, dynamic>);
       }).toList();
     } catch (e) {
@@ -36,7 +36,6 @@ class LiveDataService {
   }
 
   /// Fetch providers (hospital, police, ambulance) near given coordinates
-  /// Fetch providers from BOTH Firestore AND OpenStreetMap
   static Future<List<Provider>> fetchProviders({
     required String serviceType,
     double latitude = 19.0760,
@@ -45,38 +44,31 @@ class LiveDataService {
   }) async {
     List<Provider> allProviders = [];
 
-    // 1. Fetch from Firestore (registered providers)
+    // 1. Fetch from Firestore (This works offline automatically due to Firebase caching!)
     try {
+      // FIX: Changed 'users' to 'providers'
       final firestoreProviders = await _firestore
-          .collection('users')
-          .where('userType', isEqualTo: 'provider')
+          .collection('providers')
           .where('type', isEqualTo: serviceType)
           .where('profileComplete', isEqualTo: true)
+          .where('verificationStatus', isEqualTo: 'approved')
           .get();
 
       allProviders.addAll(firestoreProviders.docs.map((doc) {
-        final data = doc.data();
         return Provider.fromJson(doc.id, doc.data() as Map<String, dynamic>);
       }));
     } catch (e) {
       print('Error fetching Firestore providers: $e');
     }
 
-    // 2. Fetch from OpenStreetMap (existing code)
+    // 2. Fetch from OpenStreetMap (With Offline Fallback!)
     try {
       String osmKey = "";
       switch (serviceType.toLowerCase()) {
-        case "hospital":
-          osmKey = 'amenity=hospital';
-          break;
-        case "police":
-          osmKey = 'amenity=police';
-          break;
-        case "ambulance":
-          osmKey = 'amenity=clinic';
-          break;
-        default:
-          osmKey = 'amenity=hospital';
+        case "hospital": osmKey = 'amenity=hospital'; break;
+        case "police": osmKey = 'amenity=police'; break;
+        case "ambulance": osmKey = 'amenity=clinic'; break;
+        default: osmKey = 'amenity=hospital';
       }
 
       final query = """
@@ -85,6 +77,7 @@ class LiveDataService {
         out body;
       """;
 
+      // Try fetching live from the internet
       final response = await http.post(
         Uri.parse(_overpassUrl),
         body: {"data": query},
@@ -107,12 +100,29 @@ class LiveDataService {
             isAvailable: true,
             rating: 4,
             description: "Live $serviceType from OpenStreetMap",
-            inventory: [], noOfApprovedRequests: 0, // OSM data won't have inventory
+            inventory: [], noOfApprovedRequests: 0, 
           );
         }));
       }
     } catch (e) {
-      print('Error fetching OSM providers: $e');
+      // OFFLINE FALLBACK: If HTTP post fails (no internet), load from SharedPreferences
+      print('No internet for OSM. Loading cached OSM providers...');
+      
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().where((k) => k.startsWith('offline_api_'));
+      
+      for (String key in keys) {
+        final String? cachedData = prefs.getString(key);
+        if (cachedData != null) {
+          final List<dynamic> decodedList = jsonDecode(cachedData);
+          for (var item in decodedList) {
+            // Only add if it matches the requested serviceType
+            if (item['type'] == serviceType) {
+               allProviders.add(Provider.fromJson(item['id'], item as Map<String, dynamic>));
+            }
+          }
+        }
+      }
     }
 
     return allProviders;
