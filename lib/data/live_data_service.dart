@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/provider_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/inventory_item_model.dart'; // Import the new model
@@ -18,13 +19,13 @@ class LiveDataService {
   }) async {
     try {
       final query = _firestore
-          .collection('users')
-          .where('userType', isEqualTo: 'provider') // Corrected from 'role'
+          .collection('providers')
           .where('profileComplete', isEqualTo: true)
+          .where('verificationStatus', isEqualTo: 'approved') // Only get verified ones!
           .where('inventory.name', arrayContains: service);
 
       final querySnapshot = await query.get();
-
+      
       return querySnapshot.docs.map((doc) {
         final data = doc.data();
         return Provider.fromJson(doc.id, doc.data() as Map<String, dynamic>);
@@ -47,20 +48,17 @@ class LiveDataService {
 
     // 1. Fetch from Firestore (registered providers)
     try {
-      final firestoreProviders =
-          await _firestore
-              .collection('users')
-              .where('userType', isEqualTo: 'provider')
-              .where('type', isEqualTo: serviceType)
-              .where('profileComplete', isEqualTo: true)
-              .get();
+      // FIX: Changed 'users' to 'providers'
+      final firestoreProviders = await _firestore
+          .collection('providers')
+          .where('type', isEqualTo: serviceType)
+          .where('profileComplete', isEqualTo: true)
+          .where('verificationStatus', isEqualTo: 'approved')
+          .get();
 
-      allProviders.addAll(
-        firestoreProviders.docs.map((doc) {
-          final data = doc.data();
-          return Provider.fromJson(doc.id, doc.data() as Map<String, dynamic>);
-        }),
-      );
+      allProviders.addAll(firestoreProviders.docs.map((doc) {
+        return Provider.fromJson(doc.id, doc.data() as Map<String, dynamic>);
+      }));
     } catch (e) {
       print('Error fetching Firestore providers: $e');
     }
@@ -97,28 +95,22 @@ class LiveDataService {
         final data = json.decode(response.body);
         final elements = data["elements"] as List<dynamic>;
 
-        allProviders.addAll(
-          elements.map((e) {
-            return Provider(
-              id: "osm_${e["id"]}",
-              name: e["tags"]?["name"] ?? "Unknown ${serviceType.capitalize()}",
-              type: serviceType,
-              phone: e["tags"]?["phone"] ?? "N/A",
-              address: e["tags"]?["addr:full"] ?? "${e["lat"]}, ${e["lon"]}",
-              latitude: e["lat"]?.toDouble() ?? latitude,
-              longitude: e["lon"]?.toDouble() ?? longitude,
-              distance: 0.0,
-              isAvailable: true,
-              rating: 4,
-              description: "Live $serviceType from OpenStreetMap",
-              inventory: [],
-              noOfApprovedRequests: 0,
-              verificationType: '',
-              fcmToken: '',
-               // OSM data won't have inventory
-            );
-          }),
-        );
+        allProviders.addAll(elements.map((e) {
+          return Provider(
+            id: "osm_${e["id"]}",
+            name: e["tags"]?["name"] ?? "Unknown ${serviceType.capitalize()}",
+            type: serviceType,
+            phone: e["tags"]?["phone"] ?? "N/A",
+            address: e["tags"]?["addr:full"] ?? "${e["lat"]}, ${e["lon"]}",
+            latitude: e["lat"]?.toDouble() ?? latitude,
+            longitude: e["lon"]?.toDouble() ?? longitude,
+            distance: 0.0,
+            isAvailable: true,
+            rating: 4,
+            description: "Live $serviceType from OpenStreetMap",
+            inventory: [], noOfApprovedRequests: 0, verificationType: e["tags"]?["verificationType"] ?? "",
+          );
+        }));
       }
     } catch (e) {
       print('Error fetching OSM providers: $e');

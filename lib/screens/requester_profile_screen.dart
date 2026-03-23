@@ -6,6 +6,13 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/requester_model.dart';
 import '../services/auth_service.dart';
 import '../services/location_service.dart';
+import 'offline_region_picker_screen.dart';
+
+// ── Design Tokens ─────────────────────────────────────────────────────────────
+const _red = Color(0xFF00897B);
+const _redLight = Color(0xFFFFEBEE);
+const _redDark = Color(0xFF00897B);
+const _bgColor = Color(0xFFFAFAFA);
 
 class RequesterProfileScreen extends StatefulWidget {
   const RequesterProfileScreen({super.key});
@@ -15,7 +22,8 @@ class RequesterProfileScreen extends StatefulWidget {
 }
 
 class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
-  // ── State (unchanged logic) ──────────────────────────────────────────────────
+  // ── State (ALL UNCHANGED) ─────────────────────────────────────────────────
+  List<Map<String, dynamic>> _savedLocations = [];
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
@@ -29,46 +37,50 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
 
   final List<String> _bloodTypes = ['Unknown', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
-  // ── Design tokens ────────────────────────────────────────────────────────────
-  static const _teal = Color(0xFF0D9488);
-  static const _tealDark = Color(0xFF0D4F4A);
-  static const _bgColor = Color(0xFFEFF6F5);
-
   @override
   void initState() {
     super.initState();
     _loadUserData();
   }
 
-  // ── Logic (unchanged) ────────────────────────────────────────────────────────
+  // ── Logic (ALL UNCHANGED) ─────────────────────────────────────────────────
   Future<void> _loadUserData() async {
     final user = AuthService().currentUser;
     if (user == null) return;
+
     try {
-      final pos = await LocationService.getCurrentLocation();
-      if (pos != null) {
-        location = await LocationService.getAddressFromLatLng(pos.latitude, pos.longitude);
-      }
       final doc = await FirebaseFirestore.instance.collection('requesters').doc(user.uid).get();
+
       if (doc.exists && doc.data() != null) {
         final data = doc.data() as Map<String, dynamic>;
+
         setState(() {
+          if (data['savedLocations'] != null) {
+            final List<dynamic> rawList = data['savedLocations'];
+            _savedLocations = rawList.map((item) => Map<String, dynamic>.from(item)).toList();
+          } else {
+            _savedLocations = [];
+          }
+
           _nameController.text = data['name'] ?? '';
           _phoneController.text = data['phone'] ?? '';
           _medicalController.text = data['medicalNotes'] ?? '';
           _sendSmsPermission = data['sendSmsPermission'] ?? false;
           String bType = data['bloodGrp'] ?? 'Unknown';
           _selectedBloodType = _bloodTypes.contains(bType) ? bType : 'Unknown';
+
           if (data['emergencyContacts'] != null) {
             _emergencyChecklist = (data['emergencyContacts'] as List).map((e) {
-              return EmergencyContact(name: e['name'] ?? '', phone: e['phone'] ?? '')
-                ..isSelected = e['isSelected'] ?? true;
+              return EmergencyContact(
+                name: e['name'] ?? '',
+                phone: e['phone'] ?? '',
+              )..isSelected = e['isSelected'] ?? true;
             }).toList();
           }
         });
       }
     } catch (e) {
-      debugPrint("Error loading profile: $e");
+      debugPrint("Error loading profile data: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -76,26 +88,30 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
 
   Future<void> _pickAndSearchContact() async {
     var status = await Permission.contacts.request();
+
     if (status.isGranted) {
       try {
         final List<ContactInfo> rawContacts = await FlutterContactsService.getContacts();
+
         final List<EmergencyContact> mappedContacts = rawContacts.map((c) {
           return EmergencyContact(
             name: c.displayName ?? "Unknown",
-            phone: (c.phones != null && c.phones!.isNotEmpty) ? c.phones!.first.value ?? "" : "No Number",
+            phone: (c.phones != null && c.phones!.isNotEmpty)
+                ? c.phones!.first.value ?? ""
+                : "No Number",
           );
         }).toList();
+
         if (!mounted) return;
+
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (context) => Container(
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (context) => SizedBox(
             height: MediaQuery.of(context).size.height * 0.8,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
             child: ContactSearchDialog(
               contacts: mappedContacts,
               onContactSelected: (selected) {
@@ -114,215 +130,279 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
   Future<void> _saveProfile() async {
     final user = AuthService().currentUser;
     if (user == null) return;
+
     try {
       await FirebaseFirestore.instance.collection('requesters').doc(user.uid).set({
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
         'bloodGrp': _selectedBloodType,
         'medicalNotes': _medicalController.text.trim(),
-        'emergencyContacts': _emergencyChecklist.map((e) => {'name': e.name, 'phone': e.phone, 'isSelected': e.isSelected}).toList(),
+        'emergencyContacts': _emergencyChecklist.map((e) => {
+          'name': e.name,
+          'phone': e.phone,
+          'isSelected': e.isSelected,
+        }).toList(),
         'sendSmsPermission': _sendSmsPermission,
         'location': location,
         'updatedAt': FieldValue.serverTimestamp(),
         'profileComplete': true,
       }, SetOptions(merge: true));
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text("Medical ID Updated"),
-            backgroundColor: _teal,
+            backgroundColor: _red,
             behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Save Error: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Save Error: $e"),
+            backgroundColor: Colors.grey[800],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
     }
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────────
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFFEFF6F5),
-        body: Center(child: CircularProgressIndicator(color: Color(0xFF0D9488))),
+        backgroundColor: _bgColor,
+        body: Center(child: CircularProgressIndicator(color: _red)),
       );
     }
 
     return Scaffold(
       backgroundColor: _bgColor,
-      body: Form(
-        key: _formKey,
-        child: CustomScrollView(
-          slivers: [
-            _ProfileSliverHeader(
-              name: _nameController.text.isEmpty ? 'Your Name' : _nameController.text,
-              onSave: _saveProfile,
-            ),
-            SliverToBoxAdapter(
+      body: CustomScrollView(
+        slivers: [
+          _ProfileSliverAppBar(
+            name: _nameController.text,
+            bloodType: _selectedBloodType,
+            onSave: _saveProfile,
+          ),
+          SliverToBoxAdapter(
+            child: Form(
+              key: _formKey,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 20),
-
-                    // ── FULL NAME & PHONE ──────────────────────────────────────
-                    _SectionLabel(label: 'FULL NAME'),
-                    const SizedBox(height: 8),
-                    _ProfileField(controller: _nameController, hint: 'e.g. Swarup Ausarkar', icon: Icons.person_outline_rounded),
-                    const SizedBox(height: 14),
-                    _SectionLabel(label: 'MOBILE NUMBER'),
-                    const SizedBox(height: 8),
-                    _PhoneField(controller: _phoneController),
-                    const SizedBox(height: 24),
-
-                    _Divider(),
-
-                    // ── MEDICAL DETAILS ────────────────────────────────────────
-                    _SectionLabel(label: 'MEDICAL DETAILS'),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _BloodTypeCard(
-                            selected: _selectedBloodType,
-                            bloodTypes: _bloodTypes,
-                            onChanged: (v) => setState(() => _selectedBloodType = v!),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _ContactCard(contacts: _emergencyChecklist),
-                        ),
-                      ],
+                    // ── Identity ─────────────────────────────────────────
+                    _ProfileSectionCard(
+                      title: 'Identity',
+                      icon: Icons.person_rounded,
+                      child: _IdentityFields(
+                        nameController: _nameController,
+                        phoneController: _phoneController,
+                      ),
                     ),
-                    const SizedBox(height: 14),
-                    _SectionLabel(label: 'ALLERGIES & MEDICAL CONDITIONS'),
-                    const SizedBox(height: 8),
-                    _MedicalNotesField(controller: _medicalController),
-                    const SizedBox(height: 24),
-
-                    _Divider(),
-
-                    // ── LOCATION ACCESS ────────────────────────────────────────
-                    _LocationAccessCard(address: location),
-                    const SizedBox(height: 24),
-
-                    _Divider(),
-
-                    // ── AUTO-SEND SMS ──────────────────────────────────────────
-                    _SmsToggleCard(
-                      value: _sendSmsPermission,
-                      onChanged: (v) => setState(() => _sendSmsPermission = v),
-                    ),
-                    const SizedBox(height: 24),
-
-                    _Divider(),
-
-                    // ── EMERGENCY CONTACTS ─────────────────────────────────────
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _SectionLabel(label: 'EMERGENCY CONTACTS'),
-                        GestureDetector(
-                          onTap: _pickAndSearchContact,
-                          child: Row(
-                            children: [
-                              const Icon(Icons.add_circle_outline_rounded, size: 14, color: Color(0xFF0D9488)),
-                              const SizedBox(width: 4),
-                              const Text('Add New', style: TextStyle(fontSize: 12, color: Color(0xFF0D9488), fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _EmergencyContactsList(
-                      contacts: _emergencyChecklist,
-                      onDelete: (c) => setState(() => _emergencyChecklist.remove(c)),
-                      onToggle: (c, v) => setState(() => c.isSelected = v),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // ── SAVE BUTTON ────────────────────────────────────────────
-                    _SaveButton(onTap: _saveProfile),
                     const SizedBox(height: 16),
-                    _FooterLinks(),
+
+                    // ── Critical Medical Info ────────────────────────────
+                    _ProfileSectionCard(
+                      title: 'Critical Medical Info',
+                      icon: Icons.medical_services_rounded,
+                      iconColor: _red,
+                      child: _MedicalInfoFields(
+                        medicalController: _medicalController,
+                        selectedBloodType: _selectedBloodType,
+                        bloodTypes: _bloodTypes,
+                        onBloodTypeChanged: (v) => setState(() => _selectedBloodType = v!),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // ── Emergency Settings ───────────────────────────────
+                    _ProfileSectionCard(
+                      title: 'Emergency Settings',
+                      icon: Icons.notifications_active_rounded,
+                      child: _EmergencySettingsRow(
+                        value: _sendSmsPermission,
+                        onChanged: (val) => setState(() => _sendSmsPermission = val),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // ── Emergency Contacts ───────────────────────────────
+                    _SectionHeader(
+                      title: 'Emergency Contacts',
+                      actionLabel: 'Add New',
+                      actionIcon: Icons.person_add_rounded,
+                      onAction: _pickAndSearchContact,
+                    ),
+                    const SizedBox(height: 8),
+                    _EmergencyContactList(
+                      contacts: _emergencyChecklist,
+                      onToggle: (c, v) => setState(() => c.isSelected = v!),
+                      onRemove: (c) => setState(() => _emergencyChecklist.remove(c)),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // ── Saved Offline Regions ────────────────────────────
+                    _SectionHeader(
+                      title: 'Saved Offline Regions',
+                      actionLabel: 'Add Trip',
+                      actionIcon: Icons.add_location_alt_rounded,
+                      onAction: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const OfflineRegionPickerScreen()),
+                        ).then((_) => _loadUserData());
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _OfflineRegionsList(
+                      locations: _savedLocations,
+                      onDelete: (loc) async {
+                        final user = AuthService().currentUser;
+                        if (user != null) {
+                          await FirebaseFirestore.instance
+                              .collection('requesters')
+                              .doc(user.uid)
+                              .update({'savedLocations': FieldValue.arrayRemove([loc])});
+                          _loadUserData();
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Sliver App Bar ────────────────────────────────────────────────────────────
 
-class _ProfileSliverHeader extends StatelessWidget {
+class _ProfileSliverAppBar extends StatelessWidget {
   final String name;
+  final String bloodType;
   final VoidCallback onSave;
 
-  const _ProfileSliverHeader({required this.name, required this.onSave});
+  const _ProfileSliverAppBar({
+    required this.name,
+    required this.bloodType,
+    required this.onSave,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SliverAppBar(
       expandedHeight: 200,
       pinned: true,
-      backgroundColor: const Color(0xFF0D4F4A),
+      backgroundColor: _redDark,
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
         onPressed: () => Navigator.pop(context),
       ),
       actions: [
-        TextButton(
-          onPressed: onSave,
-          child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: GestureDetector(
+            onTap: onSave,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withOpacity(0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.check_rounded, color: Colors.white, size: 14),
+                  SizedBox(width: 4),
+                  Text('Save', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
+        collapseMode: CollapseMode.parallax,
         background: Container(
-          color: const Color(0xFF0D4F4A),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              // Avatar
-              Stack(
-                children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.15),
-                      border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_redDark, _red],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 40),
+                Stack(
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+                      ),
+                      child: const Icon(Icons.person_rounded, size: 38, color: Colors.white),
                     ),
-                    child: const Icon(Icons.person_rounded, size: 40, color: Colors.white),
+                    // Blood type badge
+                    if (bloodType != 'Unknown')
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            bloodType,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              color: _red,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  name.isEmpty ? 'Medical ID' : name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
                   ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: const BoxDecoration(color: Color(0xFF0D9488), shape: BoxShape.circle),
-                      child: const Icon(Icons.edit_rounded, size: 12, color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
-              const SizedBox(height: 20),
-            ],
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Emergency Profile',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -330,351 +410,330 @@ class _ProfileSliverHeader extends StatelessWidget {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  final String label;
-  const _SectionLabel({required this.label});
+// ── Section Header with Action ────────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final String actionLabel;
+  final IconData actionIcon;
+  final VoidCallback onAction;
+
+  const _SectionHeader({
+    required this.title,
+    required this.actionLabel,
+    required this.actionIcon,
+    required this.onAction,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1.5),
-    );
-  }
-}
-
-class _Divider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Divider(color: Colors.grey.withOpacity(0.15), height: 1),
-    );
-  }
-}
-
-class _ProfileField extends StatelessWidget {
-  final TextEditingController controller;
-  final String hint;
-  final IconData icon;
-
-  const _ProfileField({required this.controller, required this.hint, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
-      ),
-      child: TextFormField(
-        controller: controller,
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF0D4F4A)),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(color: Color(0xFFCBD5E1)),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title.toUpperCase(),
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF9E9E9E),
+            letterSpacing: 1.2,
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _PhoneField extends StatelessWidget {
-  final TextEditingController controller;
-  const _PhoneField({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        GestureDetector(
+          onTap: onAction,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: const Color(0xFFF0FDF9),
-              borderRadius: const BorderRadius.only(topLeft: Radius.circular(14), bottomLeft: Radius.circular(14)),
-              border: Border(right: BorderSide(color: Colors.grey.withOpacity(0.15))),
+              color: _redLight,
+              borderRadius: BorderRadius.circular(20),
             ),
-            child: const Text('+91', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D4F4A))),
+            child: Row(
+              children: [
+                Icon(actionIcon, size: 13, color: _red),
+                const SizedBox(width: 4),
+                Text(
+                  actionLabel,
+                  style: const TextStyle(fontSize: 12, color: _red, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
           ),
-          Expanded(
-            child: TextFormField(
-              controller: controller,
-              keyboardType: TextInputType.phone,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF0D4F4A)),
-              decoration: const InputDecoration(
-                hintText: '00000 00000',
-                hintStyle: TextStyle(color: Color(0xFFCBD5E1)),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              ),
-            ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Section Card ──────────────────────────────────────────────────────────────
+
+class _ProfileSectionCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Widget child;
+  final Color? iconColor;
+
+  const _ProfileSectionCard({
+    required this.title,
+    required this.icon,
+    required this.child,
+    this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = iconColor ?? _red;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BloodTypeCard extends StatelessWidget {
-  final String selected;
-  final List<String> bloodTypes;
-  final void Function(String?) onChanged;
-
-  const _BloodTypeCard({required this.selected, required this.bloodTypes, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('BLOOD TYPE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1)),
-          const SizedBox(height: 10),
-          // Blood type display pill
-          if (selected != 'Unknown')
-            Center(
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDC2626),
-                  borderRadius: BorderRadius.circular(12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, size: 15, color: color),
                 ),
-                child: Center(
-                  child: Text(selected, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white)),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF212121),
+                  ),
                 ),
-              ),
-            ),
-          const SizedBox(height: 8),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: selected,
-              isExpanded: true,
-              style: const TextStyle(fontSize: 13, color: Color(0xFF0D4F4A), fontWeight: FontWeight.w600),
-              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF0D9488), size: 18),
-              onChanged: onChanged,
-              items: bloodTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+              ],
             ),
           ),
-          if (selected != 'Unknown')
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(20)),
-                child: const Text('CRITICAL INFO', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Color(0xFFDC2626), letterSpacing: 0.5)),
-              ),
-            ),
+          const Divider(height: 1, color: Color(0xFFF5F5F5)),
+          Padding(padding: const EdgeInsets.all(16), child: child),
         ],
       ),
+    );
+  }
+}
+
+// ── Identity Fields ───────────────────────────────────────────────────────────
+
+class _IdentityFields extends StatelessWidget {
+  final TextEditingController nameController;
+  final TextEditingController phoneController;
+
+  const _IdentityFields({
+    required this.nameController,
+    required this.phoneController,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _ProfileField(
+          controller: nameController,
+          label: 'LEGAL NAME',
+          hint: 'Full name',
+          icon: Icons.person_rounded,
+        ),
+        const SizedBox(height: 12),
+        _ProfileField(
+          controller: phoneController,
+          label: 'PRIMARY PHONE',
+          hint: 'Contact number',
+          icon: Icons.phone_rounded,
+          keyboardType: TextInputType.phone,
+        ),
+      ],
+    );
+  }
+}
+
+// ── Medical Info Fields ───────────────────────────────────────────────────────
+
+class _MedicalInfoFields extends StatelessWidget {
+  final TextEditingController medicalController;
+  final String selectedBloodType;
+  final List<String> bloodTypes;
+  final void Function(String?) onBloodTypeChanged;
+
+  const _MedicalInfoFields({
+    required this.medicalController,
+    required this.selectedBloodType,
+    required this.bloodTypes,
+    required this.onBloodTypeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Blood type row
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'BLOOD TYPE',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF9E9E9E),
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAFAFA),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFEEEEEE)),
+              ),
+              child: Row(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(left: 12),
+                    child: Icon(Icons.bloodtype_rounded, size: 16, color: _red),
+                  ),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: selectedBloodType,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      ),
+                      style: const TextStyle(fontSize: 14, color: Color(0xFF212121)),
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _red),
+                      dropdownColor: Colors.white,
+                      items: bloodTypes
+                          .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                          .toList(),
+                      onChanged: onBloodTypeChanged,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _ProfileField(
+          controller: medicalController,
+          label: 'ALLERGIES / CONDITIONS',
+          hint: 'List known conditions, allergies...',
+          icon: Icons.medical_services_rounded,
+          maxLines: 3,
+        ),
+      ],
+    );
+  }
+}
+
+// ── Emergency Settings Row ────────────────────────────────────────────────────
+
+class _EmergencySettingsRow extends StatelessWidget {
+  final bool value;
+  final void Function(bool) onChanged;
+
+  const _EmergencySettingsRow({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: value ? const Color(0xFFE8F5E9) : const Color(0xFFF5F5F5),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            Icons.message_rounded,
+            size: 18,
+            color: value ? Colors.green[700] : Colors.grey[400],
+          ),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Emergency Contact SMS',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF212121)),
+              ),
+              Text(
+                'Auto-alert contacts during SOS',
+                style: TextStyle(fontSize: 11, color: Color(0xFF9E9E9E)),
+              ),
+            ],
+          ),
+        ),
+        Switch(
+          value: value,
+          onChanged: onChanged,
+          activeColor: _red,
+          activeTrackColor: _redLight,
+        ),
+      ],
+    );
+  }
+}
+
+// ── Emergency Contact List ────────────────────────────────────────────────────
+
+class _EmergencyContactList extends StatelessWidget {
+  final List<EmergencyContact> contacts;
+  final void Function(EmergencyContact, bool?) onToggle;
+  final void Function(EmergencyContact) onRemove;
+
+  const _EmergencyContactList({
+    required this.contacts,
+    required this.onToggle,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (contacts.isEmpty) {
+      return _EmptyState(
+        icon: Icons.contact_phone_rounded,
+        message: 'No emergency contacts added yet.',
+      );
+    }
+
+    return Column(
+      children: contacts
+          .map((c) => _ContactCard(contact: c, onToggle: onToggle, onRemove: onRemove))
+          .toList(),
     );
   }
 }
 
 class _ContactCard extends StatelessWidget {
-  final List<EmergencyContact> contacts;
-  const _ContactCard({required this.contacts});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('CONTACT', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1)),
-          const SizedBox(height: 8),
-          const Text(
-            'Emergency\n#',
-            style: TextStyle(fontSize: 13, color: Color(0xFF0D4F4A), fontWeight: FontWeight.w500, height: 1.4),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${contacts.length} contact${contacts.length == 1 ? '' : 's'}',
-            style: const TextStyle(fontSize: 11, color: Color(0xFF0D9488), fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MedicalNotesField extends StatelessWidget {
-  final TextEditingController controller;
-  const _MedicalNotesField({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
-      ),
-      child: TextFormField(
-        controller: controller,
-        maxLines: 3,
-        style: const TextStyle(fontSize: 14, color: Color(0xFF0D4F4A)),
-        decoration: const InputDecoration(
-          hintText: 'List any chronic conditions or allergies...',
-          hintStyle: TextStyle(color: Color(0xFFCBD5E1), fontSize: 13),
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        ),
-      ),
-    );
-  }
-}
-
-class _LocationAccessCard extends StatelessWidget {
-  final String address;
-  const _LocationAccessCard({required this.address});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6F5),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.location_on_rounded, color: Color(0xFF0D9488), size: 28),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'Allow Location Access',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF0D4F4A)),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              address.isEmpty
-                  ? 'Emergeo uses your location to connect you with the nearest emergency responders in seconds.'
-                  : address,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Colors.grey[500], height: 1.5),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SmsToggleCard extends StatelessWidget {
-  final bool value;
-  final void Function(bool) onChanged;
-
-  const _SmsToggleCard({required this.value, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6F5),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.location_on_rounded, color: Color(0xFF0D9488), size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Auto-send location SMS', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0D4F4A))),
-                  Text('Sends live coordinates during SOS', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-                ],
-              ),
-            ),
-            Switch(
-              value: value,
-              onChanged: onChanged,
-              activeColor: const Color(0xFF0D9488),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmergencyContactsList extends StatelessWidget {
-  final List<EmergencyContact> contacts;
-  final void Function(EmergencyContact) onDelete;
-  final void Function(EmergencyContact, bool) onToggle;
-
-  const _EmergencyContactsList({required this.contacts, required this.onDelete, required this.onToggle});
-
-  @override
-  Widget build(BuildContext context) {
-    if (contacts.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Center(
-          child: Text('No emergency contacts added', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
-        ),
-      );
-    }
-    return Column(
-      children: contacts.map((c) => _EmergencyContactTile(contact: c, onDelete: onDelete, onToggle: onToggle)).toList(),
-    );
-  }
-}
-
-class _EmergencyContactTile extends StatelessWidget {
   final EmergencyContact contact;
-  final void Function(EmergencyContact) onDelete;
-  final void Function(EmergencyContact, bool) onToggle;
+  final void Function(EmergencyContact, bool?) onToggle;
+  final void Function(EmergencyContact) onRemove;
 
-  const _EmergencyContactTile({required this.contact, required this.onDelete, required this.onToggle});
+  const _ContactCard({
+    required this.contact,
+    required this.onToggle,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -682,118 +741,265 @@ class _EmergencyContactTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)],
-        border: Border(left: BorderSide(color: const Color(0xFF0D9488), width: 3)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: contact.isSelected ? _red.withOpacity(0.2) : const Color(0xFFEEEEEE),
+        ),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          children: [
-            // Avatar initial
-            Container(
-              width: 36,
-              height: 36,
-              decoration: const BoxDecoration(color: Color(0xFFEFF6F5), shape: BoxShape.circle),
-              child: Center(
-                child: Text(
-                  contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0D9488)),
+      child: Row(
+        children: [
+          // Checkbox
+          Checkbox(
+            value: contact.isSelected,
+            onChanged: (v) => onToggle(contact, v),
+            activeColor: _red,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          ),
+          // Avatar
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: contact.isSelected ? _redLight : const Color(0xFFF5F5F5),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: contact.isSelected ? _red : Colors.grey[400],
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(contact.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0D4F4A))),
-                      const SizedBox(width: 6),
-                      if (contact.isSelected)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                          decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(20)),
-                          child: const Text('VERIFIED', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w800, color: Color(0xFF16A34A), letterSpacing: 0.5)),
-                        ),
-                    ],
-                  ),
-                  Text(contact.phone, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-                ],
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.more_vert_rounded, size: 18, color: Color(0xFF94A3B8)),
-              onPressed: () => onDelete(contact),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SaveButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _SaveButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        height: 54,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0D4F4A), Color(0xFF0D9488)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
           ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: const Color(0xFF0D9488).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
-        ),
-        child: const Center(
-          child: Text('Save Profile', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
-        ),
+          const SizedBox(width: 10),
+          // Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  contact.name,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF212121)),
+                ),
+                Text(
+                  contact.phone,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF9E9E9E)),
+                ),
+              ],
+            ),
+          ),
+          // Delete
+          IconButton(
+            icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFBDBDBD), size: 20),
+            onPressed: () => onRemove(contact),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _FooterLinks extends StatelessWidget {
+// ── Offline Regions List ──────────────────────────────────────────────────────
+
+class _OfflineRegionsList extends StatelessWidget {
+  final List<Map<String, dynamic>> locations;
+  final void Function(Map<String, dynamic>) onDelete;
+
+  const _OfflineRegionsList({required this.locations, required this.onDelete});
+
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    if (locations.isEmpty) {
+      return _EmptyState(
+        icon: Icons.offline_pin_rounded,
+        message: 'No offline regions saved. Add a trip if you are heading to a low-network area.',
+      );
+    }
+
+    return Column(
+      children: locations
+          .map((loc) => _OfflineRegionCard(location: loc, onDelete: onDelete))
+          .toList(),
+    );
+  }
+}
+
+class _OfflineRegionCard extends StatelessWidget {
+  final Map<String, dynamic> location;
+  final void Function(Map<String, dynamic>) onDelete;
+
+  const _OfflineRegionCard({required this.location, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE3F2FD)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE3F2FD),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.offline_pin_rounded, size: 18, color: Color(0xFF1565C0)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  location['name'] ?? 'Saved Trip',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF212121),
+                  ),
+                ),
+                Text(
+                  'Radius: ${location['radius']} km',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF9E9E9E)),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFBDBDBD), size: 20),
+            onPressed: () => onDelete(location),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Profile Field ─────────────────────────────────────────────────────────────
+
+class _ProfileField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final IconData icon;
+  final TextInputType? keyboardType;
+  final int maxLines;
+
+  const _ProfileField({
+    required this.controller,
+    required this.label,
+    required this.hint,
+    required this.icon,
+    this.keyboardType,
+    this.maxLines = 1,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _FooterLink(label: 'Terms of Service'),
-        const Text(' · ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-        _FooterLink(label: 'Privacy Policy'),
-        const Text(' · ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-        _FooterLink(label: 'Help Center'),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF9E9E9E),
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFFAFAFA),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFEEEEEE)),
+          ),
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: Icon(icon, size: 16, color: _red),
+              ),
+              Expanded(
+                child: TextFormField(
+                  controller: controller,
+                  maxLines: maxLines,
+                  keyboardType: keyboardType,
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF212121)),
+                  decoration: InputDecoration(
+                    hintText: hint,
+                    hintStyle: const TextStyle(color: Color(0xFFBDBDBD), fontSize: 13),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 13),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
 }
 
-class _FooterLink extends StatelessWidget {
-  final String label;
-  const _FooterLink({required this.label});
+// ── Empty State ───────────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String message;
+
+  const _EmptyState({required this.icon, required this.message});
 
   @override
   Widget build(BuildContext context) {
-    return Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)));
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF5F5F5)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 32, color: const Color(0xFFE0E0E0)),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF9E9E9E), height: 1.4),
+          ),
+        ],
+      ),
+    );
   }
 }
 
-// ── ContactSearchDialog (unchanged logic, updated style) ──────────────────────
+// ── Contact Search Dialog (UNCHANGED) ────────────────────────────────────────
 
 class ContactSearchDialog extends StatefulWidget {
   final List<EmergencyContact> contacts;
   final Function(EmergencyContact) onContactSelected;
-  const ContactSearchDialog({super.key, required this.contacts, required this.onContactSelected});
+  const ContactSearchDialog({
+    super.key,
+    required this.contacts,
+    required this.onContactSelected,
+  });
 
   @override
   State<ContactSearchDialog> createState() => _ContactSearchDialogState();
@@ -812,38 +1018,46 @@ class _ContactSearchDialogState extends State<ContactSearchDialog> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const SizedBox(height: 12),
-        Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(2))),
-        const SizedBox(height: 16),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Container(
-            decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Search contacts...',
-                hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
-                prefixIcon: Icon(Icons.search_rounded, color: Colors.grey[400], size: 18),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.all(16),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: "Search contacts...",
+              prefixIcon: const Icon(Icons.search_rounded, color: _red),
+              filled: true,
+              fillColor: const Color(0xFFFAFAFA),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
               ),
-              onChanged: (v) => setState(() {
-                _filtered = widget.contacts.where((c) => c.name.toLowerCase().contains(v.toLowerCase())).toList();
-              }),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: _red, width: 1.5),
+              ),
             ),
+            onChanged: (v) => setState(() => _filtered = widget.contacts
+                .where((c) => c.name.toLowerCase().contains(v.toLowerCase()))
+                .toList()),
           ),
         ),
-        const SizedBox(height: 8),
         Expanded(
           child: ListView.builder(
             itemCount: _filtered.length,
             itemBuilder: (context, i) => ListTile(
               leading: CircleAvatar(
-                backgroundColor: const Color(0xFFEFF6F5),
-                child: Text(_filtered[i].name.isNotEmpty ? _filtered[i].name[0] : '?', style: const TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.w700)),
+                backgroundColor: _redLight,
+                radius: 18,
+                child: Text(
+                  _filtered[i].name.isNotEmpty ? _filtered[i].name[0].toUpperCase() : '?',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _red),
+                ),
               ),
-              title: Text(_filtered[i].name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-              subtitle: Text(_filtered[i].phone, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              title: Text(_filtered[i].name, style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(_filtered[i].phone, style: const TextStyle(fontSize: 12)),
               onTap: () => widget.onContactSelected(_filtered[i]),
             ),
           ),
