@@ -12,14 +12,21 @@ class DataService {
   static Future<List<Provider>> loadProviders() async {
     if (_providers.isEmpty) {
       try {
-        final String jsonString =
-        await rootBundle.loadString('assets/data/providers.json');
+        final String jsonString = await rootBundle.loadString(
+          'assets/data/providers.json',
+        );
         final Map<String, dynamic> jsonData = json.decode(jsonString);
 
         final List<dynamic> providersJson = jsonData['providers'];
-        _providers = providersJson
-            .map((json) => Provider.fromJson(json['id'] ?? '', json as Map<String, dynamic>))
-            .toList();
+        _providers =
+            providersJson
+                .map(
+                  (json) => Provider.fromJson(
+                    json['id'] ?? '',
+                    json as Map<String, dynamic>,
+                  ),
+                )
+                .toList();
       } catch (e) {
         print('Error loading providers from JSON, using fallback: $e');
         _providers = _getFallbackProviders();
@@ -28,39 +35,41 @@ class DataService {
     return _providers;
   }
 
-  // Load all emergency requests (dummy/fallback only for now)
+  // Load all emergency requests from JSON file
   static Future<List<EmergencyRequest>> loadRequests() async {
     if (_requests.isEmpty) {
       try {
-        final String jsonString =
-        await rootBundle.loadString('assets/data/requests.json');
+        final String jsonString = await rootBundle.loadString(
+          'assets/data/requests.json',
+        );
         final Map<String, dynamic> jsonData = json.decode(jsonString);
         final List<dynamic> requestsJson = jsonData['requests'];
-        
-        // FIXED: Manually map fields to match the updated model
-        _requests = requestsJson.map((json) {
-          final map = json as Map<String, dynamic>;
-          return EmergencyRequest(
-            id: map['id'] ?? '',
-            itemName: map['itemName'] ?? '',
-            itemQuantity: map['itemQuantity'] ?? 1,
-            itemUnit: map['itemUnit'] ?? '',
-            requesterName: map['requesterName'] ?? '',
-            requesterPhone: map['requesterPhone'] ?? '',
-            status: map['status'] ?? 'pending',
-            timestamp: DateTime.now(), // Dummy data timestamp
-            latitude: map['latitude']?.toDouble() ?? 0.0,
-            longitude: map['longitude']?.toDouble() ?? 0.0,
-            locationName: map['locationName'] ?? '',
-            masterRequestId: map['masterRequestId'] ?? '',
-            description: map['description'] ?? '',
-            providerId: '', // FIXED: Cannot be null
-            requesterId: map['requesterId'] ?? '',
-            acceptedAt: DateTime.now(),
-            confirmedProviderId: '',
-            radius: 5.0, // FIXED: Added missing radius field
-          );
-        }).toList();
+
+        // Map fields to match the updated model requirements
+        _requests =
+            requestsJson.map((json) {
+              final map = json as Map<String, dynamic>;
+              return EmergencyRequest(
+                id: map['id'] ?? '',
+                itemName: map['itemName'] ?? '',
+                itemQuantity: map['itemQuantity'] ?? 1,
+                itemUnit: map['itemUnit'] ?? '',
+                requesterName: map['requesterName'] ?? '',
+                requesterPhone: map['requesterPhone'] ?? '',
+                status: map['status'] ?? 'pending',
+                timestamp: DateTime.now(), // Use current time for dummy data
+                latitude: map['latitude']?.toDouble() ?? 0.0,
+                longitude: map['longitude']?.toDouble() ?? 0.0,
+                locationName: map['locationName'] ?? '',
+                masterRequestId: map['masterRequestId'] ?? '',
+                description: map['description'] ?? '',
+                requesterId: map['requesterId'] ?? '',
+                acceptedAt: DateTime.now(),
+                confirmedProviderId: '',
+                radius: map['radius']?.toDouble() ?? 5.0,
+                expiredAt: map['expiredAt'], // Default to 5.0 if missing
+              );
+            }).toList();
       } catch (e) {
         print('Error loading requests from JSON, using fallback: $e');
         _requests = _getFallbackRequests();
@@ -69,7 +78,7 @@ class DataService {
     return _requests;
   }
 
-  // Fallback providers
+  // Fallback providers for testing when JSON is missing
   static List<Provider> _getFallbackProviders() {
     return [
       Provider(
@@ -86,46 +95,58 @@ class DataService {
         description: 'Major government hospital with 24/7 emergency services.',
         inventory: [
           InventoryItem(
-              name: 'ICU Bed',
-              quantity: 10,
-              unit: 'beds',
-              lastUpdated: DateTime.now()),
+            name: 'ICU Bed',
+            quantity: 10,
+            unit: 'beds',
+            lastUpdated: DateTime.now(),
+          ),
           InventoryItem(
-              name: 'Emergency Surgery',
-              quantity: 5,
-              unit: 'rooms',
-              lastUpdated: DateTime.now()),
-        ], noOfApprovedRequests: 0,
+            name: 'Emergency Surgery',
+            quantity: 5,
+            unit: 'rooms',
+            lastUpdated: DateTime.now(),
+          ),
+        ],
+        noOfApprovedRequests: 0,
+        verificationType: '',
+        fcmToken: '',
       ),
       Provider(
         id: 'h002',
         name: 'Lilavati Hospital',
         type: 'hospital',
         phone: '+91-22-2640-5000',
-        address: 'A-791, Bandra Reclamation, Bandra West, Mumbai, Maharashtra 400050',
+        address:
+            'A-791, Bandra Reclamation, Bandra West, Mumbai, Maharashtra 400050',
         latitude: 19.0544,
         longitude: 72.8266,
         distance: 3.2,
         isAvailable: true,
         rating: 5,
-        description: 'Premium private hospital with advanced medical facilities.',
+        description:
+            'Premium private hospital with advanced medical facilities.',
         inventory: [
           InventoryItem(
-              name: 'ICU Bed',
-              quantity: 20,
-              unit: 'beds',
-              lastUpdated: DateTime.now()),
+            name: 'ICU Bed',
+            quantity: 20,
+            unit: 'beds',
+            lastUpdated: DateTime.now(),
+          ),
           InventoryItem(
-              name: 'MRI Scan',
-              quantity: 2,
-              unit: 'machines',
-              lastUpdated: DateTime.now()),
-        ], noOfApprovedRequests: 0,
+            name: 'MRI Scan',
+            quantity: 2,
+            unit: 'machines',
+            lastUpdated: DateTime.now(),
+          ),
+        ],
+        noOfApprovedRequests: 0,
+        verificationType: '',
+        fcmToken: '',
       ),
     ];
   }
 
-  // Fallback requests
+  // Fallback requests for testing when JSON is missing
   static List<EmergencyRequest> _getFallbackRequests() {
     return [
       EmergencyRequest(
@@ -142,11 +163,11 @@ class DataService {
         itemName: 'ICU Bed',
         itemQuantity: 1,
         itemUnit: 'beds',
-        locationName: '', 
-        providerId: '', // FIXED: Changed from null to empty string
-        acceptedAt: DateTime.now(), 
-        confirmedProviderId: '', 
-        radius: 5.0, // FIXED: Added missing radius parameter
+        locationName: 'Andheri West',
+        acceptedAt: DateTime.now(),
+        confirmedProviderId: '',
+        radius: 5.0,
+        expiredAt: DateTime.now().subtract(const Duration(minutes: 15)),
       ),
     ];
   }
@@ -159,11 +180,15 @@ class DataService {
   // Get providers filtered by service type
   static Future<List<Provider>> getProvidersByType(String serviceType) async {
     final allProviders = await loadProviders();
-    return allProviders.where((provider) =>
-    provider.type.toLowerCase() == serviceType.toLowerCase()
-    ).toList();
+    return allProviders
+        .where(
+          (provider) =>
+              provider.type.toLowerCase() == serviceType.toLowerCase(),
+        )
+        .toList();
   }
 
+  // Updates availability in local cache
   static void updateProviderAvailability(String providerId, bool isAvailable) {
     final index = _providers.indexWhere((p) => p.id == providerId);
     if (index != -1) {
@@ -180,7 +205,10 @@ class DataService {
         isAvailable: isAvailable,
         rating: oldProvider.rating,
         description: oldProvider.description,
-        inventory: oldProvider.inventory, noOfApprovedRequests: 0,
+        inventory: oldProvider.inventory,
+        noOfApprovedRequests: oldProvider.noOfApprovedRequests,
+        verificationType: oldProvider.verificationType,
+        fcmToken: oldProvider.fcmToken,
       );
     }
   }

@@ -25,7 +25,7 @@ class LiveDataService {
           .where('inventory.name', arrayContains: service);
 
       final querySnapshot = await query.get();
-      
+
       return querySnapshot.docs.map((doc) {
         return Provider.fromJson(doc.id, doc.data() as Map<String, dynamic>);
       }).toList();
@@ -44,8 +44,6 @@ class LiveDataService {
   }) async {
     List<Provider> allProviders = [];
 
-    // 1. Fetch from Firestore (This works offline automatically due to Firebase caching!)
-    try {
       // FIX: Changed 'users' to 'providers'
       final firestoreProviders = await _firestore
           .collection('providers')
@@ -57,9 +55,6 @@ class LiveDataService {
       allProviders.addAll(firestoreProviders.docs.map((doc) {
         return Provider.fromJson(doc.id, doc.data() as Map<String, dynamic>);
       }));
-    } catch (e) {
-      print('Error fetching Firestore providers: $e');
-    }
 
     // 2. Fetch from OpenStreetMap (With Offline Fallback!)
     try {
@@ -100,7 +95,10 @@ class LiveDataService {
             isAvailable: true,
             rating: 4,
             description: "Live $serviceType from OpenStreetMap",
-            inventory: [], noOfApprovedRequests: 0, 
+            inventory: [], 
+            noOfApprovedRequests: 0,
+            verificationType: '',
+            fcmToken: '',
           );
         }));
       }

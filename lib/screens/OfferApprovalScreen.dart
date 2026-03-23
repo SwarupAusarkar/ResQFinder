@@ -193,12 +193,12 @@ class _ApprovalScreenState extends State<ApprovalScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.check, color: Colors.green, size: 16),
+                  Icon(Icons.check, color: Color(0xFF00897B), size: 16),
                   SizedBox(width: 8),
                   Text(
                     'Provider confirmed!',
                     style: TextStyle(
-                      color: Colors.green,
+                      color: Color(0xFF00897B),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
