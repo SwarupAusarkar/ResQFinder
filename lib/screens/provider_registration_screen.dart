@@ -154,7 +154,7 @@ class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen>
         hfrId: _hfrIdController.text.trim(),
         nmcId: _nmcIdController.text.trim(),
         certificateImage: _certificateImage,
-        facilityImages: _facilityImages,
+        facilityImages: _facilityImages, isHFRVerified:true, isNMCVerified: true,
       );
 
       if (mounted) Navigator.pushReplacementNamed(context, '/provider_guard');
