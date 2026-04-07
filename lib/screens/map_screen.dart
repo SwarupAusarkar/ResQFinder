@@ -147,6 +147,7 @@ class _MapScreenState extends State<MapScreen> {
             Positioned(bottom: 90, left: 20, child: _ResultsBubble(count: _filteredProviders.length)),
         ],
       ),
+
     );
   }
 
@@ -156,6 +157,29 @@ class _MapScreenState extends State<MapScreen> {
       options: MapOptions(
         initialCenter: _currentPosition ?? const LatLng(19.0760, 72.8777),
         initialZoom: 13.0,
+
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: _currentPosition ?? const LatLng(19.0760, 72.8777), // Default to Mumbai
+                initialZoom: 13.0,
+              ),
+              children: [
+                TileLayer(
+                urlTemplate: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+                subdomains: const ['a', 'b', 'c', 'd'],
+                userAgentPackageName: "com.cityissues.app",
+              ),
+                MarkerLayer(markers: _buildMarkers()),
+              ],
+            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _centerOnUserLocation,
+        backgroundColor: _getServiceColor(),
+        child: const Icon(Icons.my_location, color: Colors.white),
+
       ),
       children: [
         TileLayer(urlTemplate: "https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png", userAgentPackageName: "com.cityissues.app"),
