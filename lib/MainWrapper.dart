@@ -115,8 +115,6 @@ class _MainWrapperState extends State<MainWrapper>
           currentIndex: _currentIndex,
           tabs: currentTabs,
           onTap: _onTabTapped,
-          primaryColor: primaryColor,
-          inactiveColor: inactiveColor,
         ),
       ),
     );
