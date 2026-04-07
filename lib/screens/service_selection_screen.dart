@@ -1,388 +1,328 @@
+// lib/screens/service_selection_screen.dart
 import 'package:emergency_res_loc_new/screens/request_history_screen.dart';
 import 'package:emergency_res_loc_new/screens/requester_profile_screen.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 
-// Screen where requesters choose the type of emergency service they need
 class ServiceSelectionScreen extends StatelessWidget {
   const ServiceSelectionScreen({super.key});
 
+  // ── Logic (unchanged) ────────────────────────────────────────────────────────
   Future<void> _signOut(BuildContext context) async {
     try {
-      print("👋 Signing out from ServiceSelectionScreen...");
       await AuthService().signOut();
-      
       if (context.mounted) {
-        print("→ Navigating to home screen");
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          '/',
-          (route) => false,
-        );
+        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
       }
     } catch (e) {
-      print("❌ Sign out error: $e");
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Sign out failed: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Sign out failed: $e'), backgroundColor: Colors.red),
         );
       }
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Select Emergency Service'),
-        backgroundColor: Color(0xFF00897B),
-        foregroundColor: Colors.white,
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Sign Out',
-            onPressed: () => _signOut(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.person),
-            tooltip: 'Profile',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const RequesterProfileScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.history),
-            tooltip: 'Request history',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const RequesterHistoryScreen()),
-              );
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header section
-              const Text(
-                'What type of emergency\nservice do you need?',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Select the appropriate service and we\'ll find the nearest available providers in Mumbai.',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 40),
-
-              // Service type cards
-              Column(
-                children: [
-                  _buildServiceCard(
-                    context: context,
-                    title: 'Hospital',
-                    subtitle: 'Medical emergencies & treatment',
-                    icon: '🏥',
-                    serviceType: 'hospital',
-                    color: Color(0xFF00897B),
-                    description: 'Emergency rooms, doctors, medical care',
-                  ),
-                  const SizedBox(height: 16),
-
-                  _buildServiceCard(
-                    context: context,
-                    title: 'Police',
-                    subtitle: 'Security & law enforcement',
-                    icon: '🚓',
-                    serviceType: 'police',
-                    color: Colors.blue,
-                    description: 'Crime reporting, accidents, public safety',
-                  ),
-                  const SizedBox(height: 16),
-
-                  _buildServiceCard(
-                    context: context,
-                    title: 'Ambulance',
-                    subtitle: 'Emergency medical transport',
-                    icon: '🚑',
-                    serviceType: 'ambulance',
-                    color: Colors.orange,
-                    description: 'Paramedics, medical transport, life support',
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 32),
-
-              // Indian Emergency Numbers Info Card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue[200]!),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.blue[700]),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Emergency Numbers in India',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue[700],
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _buildEmergencyNumber('112', 'All Emergency Services', Icons.emergency),
-                    _buildEmergencyNumber('100', 'Police', Icons.local_police),
-                    _buildEmergencyNumber('101', 'Fire Department', Icons.local_fire_department),
-                    _buildEmergencyNumber('108', 'Ambulance', Icons.local_hospital),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Emergency contact info
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.red[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red[200]!),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      color: Colors.red[700],
-                      size: 24,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Life-threatening emergency?',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.red[700],
-                            ),
-                          ),
-                          Text(
-                            'Call 112 immediately for fastest response',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.red[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ElevatedButton(
-                      onPressed: () {
-                        _showEmergencyDialog(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      ),
-                      child: const Text('Call 112'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Build emergency number info row
-  Widget _buildEmergencyNumber(String number, String service, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: Colors.blue[600]),
-          const SizedBox(width: 8),
-          Text(
-            number,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '- $service',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[700],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Build service selection card
-  Widget _buildServiceCard({
-    required BuildContext context,
-    required String title,
-    required String subtitle,
-    required String icon,
-    required String serviceType,
-    required Color color,
-    required String description,
-  }) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: InkWell(
-        onTap: () {
-          // Navigate to provider list with selected service type
-          Navigator.pushNamed(
-            context,
-            '/provider-list',
-            arguments: {'serviceType': serviceType},
-          );
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Row(
-            children: [
-              // Service icon
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text(
-                    icon,
-                    style: const TextStyle(fontSize: 28),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-
-              // Service info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[500],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Arrow icon
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.arrow_forward_ios,
-                  color: color,
-                  size: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Show emergency call dialog
   void _showEmergencyDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.warning, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Emergency Call'),
-          ],
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(children: [Icon(Icons.warning, color: Colors.red), SizedBox(width: 8), Text('Emergency Call')]),
         content: const Text(
           'This is a demo app. In a real emergency, you would be connected to 112 emergency services.\n\n'
-          'Indian Emergency Numbers:\n'
-          '• 112 - All Emergency Services\n'
-          '• 100 - Police\n'
-          '• 101 - Fire Department\n'
-          '• 108 - Ambulance\n\n'
-          'For life-threatening emergencies, always call 112 directly.',
+              'Indian Emergency Numbers:\n• 112 - All Emergency Services\n• 100 - Police\n• 101 - Fire Department\n• 108 - Ambulance',
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Understood'),
-          ),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Understood'))],
+      ),
+    );
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFEFF6F5),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _TopBar(
+              onSignOut: () => _signOut(context),
+              onProfile: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RequesterProfileScreen())),
+              onHistory: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RequesterHistoryScreen())),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 8),
+                    _Header(),
+                    const SizedBox(height: 28),
+                    _ServiceCard(
+                      title: 'Hospital & ER',
+                      subtitle: 'Emergency rooms • Doctors • ICU',
+                      icon: '🏥',
+                      serviceType: 'hospital',
+                      badgeText: 'NEAREST: 1.2KM',
+                      badgeColor: const Color(0xFFDC2626),
+                    ),
+                    const SizedBox(height: 14),
+                    _ServiceCard(
+                      title: 'Police',
+                      subtitle: 'Immediate local protection',
+                      icon: '🛡️',
+                      serviceType: 'police',
+                      badgeText: null,
+                      badgeColor: Colors.blue,
+                    ),
+                    const SizedBox(height: 14),
+                    _ServiceCard(
+                      title: 'Ambulance',
+                      subtitle: 'BLS, ALS & Neonatal',
+                      icon: '🚑',
+                      serviceType: 'ambulance',
+                      badgeText: null,
+                      badgeColor: Colors.orange,
+                    ),
+                    const SizedBox(height: 32),
+                    _QuickDialSection(onEmergencyTap: () => _showEmergencyDialog(context)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+class _TopBar extends StatelessWidget {
+  final VoidCallback onSignOut;
+  final VoidCallback onProfile;
+  final VoidCallback onHistory;
+
+  const _TopBar({required this.onSignOut, required this.onProfile, required this.onHistory});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 12, 0),
+      child: Row(
+        children: [
+          const Spacer(),
+          _IconBtn(icon: Icons.history_rounded, onTap: onHistory),
+          const SizedBox(width: 6),
+          _IconBtn(icon: Icons.person_rounded, onTap: onProfile),
+          const SizedBox(width: 6),
+          _IconBtn(icon: Icons.logout_rounded, onTap: onSignOut),
         ],
       ),
+    );
+  }
+}
+
+class _IconBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _IconBtn({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6)],
+        ),
+        child: Icon(icon, size: 18, color: const Color(0xFF0D4F4A)),
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'What type of\nemergency service\ndo you need?',
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF0D4F4A),
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Swift response within 10–15 minutes in your area.',
+          style: TextStyle(fontSize: 13, color: Colors.grey[500], height: 1.4),
+        ),
+      ],
+    );
+  }
+}
+
+class _ServiceCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String icon;
+  final String serviceType;
+  final String? badgeText;
+  final Color badgeColor;
+
+  const _ServiceCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.serviceType,
+    required this.badgeText,
+    required this.badgeColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(context, '/provider-list', arguments: {'serviceType': serviceType}),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 4))],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              // Icon box
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF9),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Center(child: Text(icon, style: const TextStyle(fontSize: 26))),
+                  ),
+                  if (badgeText != null)
+                    Positioned(
+                      top: -10,
+                      right: -40,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: badgeColor,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          badgeText!,
+                          style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF0D4F4A))),
+                    const SizedBox(height: 4),
+                    Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: Colors.grey[300], size: 22),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickDialSection extends StatelessWidget {
+  final VoidCallback onEmergencyTap;
+  const _QuickDialSection({required this.onEmergencyTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionLabel(label: 'QUICK DIAL INDIA SERVICES'),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _DialButton(number: '112', label: 'ALL HELP', color: const Color(0xFFDC2626), onTap: onEmergencyTap),
+            const SizedBox(width: 10),
+            _DialButton(number: '102', label: 'MEDICAL', color: const Color(0xFF0D9488), onTap: onEmergencyTap),
+            const SizedBox(width: 10),
+            _DialButton(number: '100', label: 'POLICE', color: const Color(0xFF1D4ED8), onTap: onEmergencyTap),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DialButton extends StatelessWidget {
+  final String number;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _DialButton({required this.number, required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [BoxShadow(color: color.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))],
+          ),
+          child: Column(
+            children: [
+              Text(number, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white)),
+              const SizedBox(height: 2),
+              Text(label, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: Colors.white70, letterSpacing: 0.8)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  const _SectionLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1.5),
     );
   }
 }

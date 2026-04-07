@@ -1,7 +1,14 @@
 
 import 'package:emergency_res_loc_new/models/inventory_item_model.dart';
+import 'package:emergency_res_loc_new/screens/InventoryManagementScreen.dart';
+import 'package:emergency_res_loc_new/screens/ProviderHistoryPage.dart';
 import 'package:emergency_res_loc_new/screens/ProviderMapScreen.dart';
+import 'package:emergency_res_loc_new/screens/myOffersPage.dart';
+import 'package:emergency_res_loc_new/screens/provider_main_screen.dart';
+import 'package:emergency_res_loc_new/screens/provider_profile_edit_screen.dart';
 import 'package:emergency_res_loc_new/screens/provider_registration_screen.dart';
+import 'package:emergency_res_loc_new/screens/request_history_screen.dart';
+import 'package:emergency_res_loc_new/screens/requester_profile_screen.dart';
 import 'package:emergency_res_loc_new/screens/requester_registeration.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -139,15 +146,22 @@ class _EmergencyResourceLocatorAppState
             (context) => const ProviderRegistrationScreen(),
         '/service-selection': (context) => const ServiceSelectionScreen(),
         '/provider-list': (context) => const ProviderListScreen(),
+        '/requester-history':(context)=> const RequesterHistoryScreen(),
+        '/my-offers':(context)=>const MyOffersPage(),
+        '/provider-history':(context)=> const HistoryPage(),
+        '/requester-profile':(context)=> const RequesterProfileScreen(),
         '/admin-dashboard': (context) => const AdminDashboardScreen(),
+        '/provider-main': (context) => const ProviderMainScreen(),
+        '/provider-profile':(context)=> const ProviderProfileEditScreen(),
         '/provider-details': (context) => const ProviderDetailsScreen(),
         '/map': (context) => const MapScreen(),
         '/citizen-registration': (context) => const CitizenRegisterScreen(),
         '/provider-dashboard':
             (context) => const ProviderDashboardScreen(initialTab: ''),
+        '/provider-registration':(context)=> const ProviderRegistrationScreen(),
         '/provider_map':(context)=> const ProviderMapScreen(),
         '/manage-services': (context) => const ManageServicesScreen(),
-        '/manage-inventory': (context) => const ManageInventoryScreen(),
+        '/manage-inventory': (context) => const InventoryMgmtScreen(),
         '/send-request':
             (context) => SendRequestScreen(
               inventoryItem: InventoryItem(

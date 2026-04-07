@@ -1,3 +1,5 @@
+// lib/screens/OTP_verification_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
@@ -15,221 +17,165 @@ class OtpVerificationScreen extends StatefulWidget {
   });
 
   @override
-  State<OtpVerificationScreen> createState() =>
-      _OtpVerificationScreenState();
+  State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
 }
 
-class _OtpVerificationScreenState
-    extends State<OtpVerificationScreen> {
-  final TextEditingController _otpController =
-  TextEditingController();
-
+class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
+  // ── State (unchanged logic) ──────────────────────────────────────────────────
+  final TextEditingController _otpController = TextEditingController();
   bool isVerifying = false;
+
+  // ── NEW: countdown timer for resend ──────────────────────────────────────────
+  int _secondsLeft = 28;
+  Timer? _timer;
+
+  // ── OTP digit controllers (6 boxes) ─────────────────────────────────────────
+  final List<TextEditingController> _digitControllers =
+  List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+
+  static const _teal = Color(0xFF0D9488);
+  static const _tealDark = Color(0xFF0D4F4A);
+  static const _bgColor = Color(0xFFF0F9F8);
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (_secondsLeft == 0) {
+        t.cancel();
+      } else {
+        if (mounted) setState(() => _secondsLeft--);
+      }
+    });
+  }
 
   @override
   void dispose() {
     _otpController.dispose();
+    _timer?.cancel();
+    for (final c in _digitControllers) { c.dispose(); }
+    for (final f in _focusNodes) { f.dispose(); }
     super.dispose();
   }
 
+  String get _composedOtp =>
+      _digitControllers.map((c) => c.text).join();
+
+  void _onDigitChanged(String value, int index) {
+    if (value.length == 1 && index < 5) {
+      _focusNodes[index + 1].requestFocus();
+    } else if (value.isEmpty && index > 0) {
+      _focusNodes[index - 1].requestFocus();
+    }
+    // Also sync to hidden controller for logic
+    _otpController.text = _composedOtp;
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    // Masked phone: +91 89567 ••••61
+    final phone = widget.formattedPhone;
+    final masked = phone.length > 6
+        ? '${phone.substring(0, phone.length - 4)}••••${phone.substring(phone.length - 2)}'
+        : phone;
+
     return Scaffold(
-      resizeToAvoidBottomInset: true,
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        iconTheme:
-        const IconThemeData(color: Color(0xFF00897B)),
-      ),
+      backgroundColor: _bgColor,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight:
-              MediaQuery.of(context).size.height - 100,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(height: 40),
-
-                /// Icon + Loader
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    if (isVerifying)
-                      const SizedBox(
-                        width: 80,
-                        height: 80,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 3,
-                          valueColor:
-                          AlwaysStoppedAnimation<Color>(
-                            Color(0xFF00897B),
-                          ),
-                        ),
-                      ),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00897B)
-                            .withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.sms_outlined,
-                        size: 40,
-                        color: Color(0xFF00897B),
-                      ),
-                    ),
-                  ],
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 0, 28, 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Back button row
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: _tealDark),
+                  onPressed: isVerifying ? null : () => Navigator.pop(context),
+                  padding: EdgeInsets.zero,
                 ),
+              ),
+              const Spacer(flex: 2),
 
-                const SizedBox(height: 32),
+              // Logo icon
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(color: _tealDark, borderRadius: BorderRadius.circular(16)),
+                child: const Icon(Icons.medical_services_rounded, size: 28, color: Colors.white),
+              ),
+              const SizedBox(height: 28),
 
-                /// Title
-                Text(
-                  widget.isLogin
-                      ? 'Login OTP'
-                      : 'Verify Phone',
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+              // Title
+              const Text(
+                'Verify Your Number',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _tealDark),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "We've sent a 6-digit OTP to $masked",
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.5),
+              ),
+
+              const SizedBox(height: 36),
+
+              // 6 OTP digit boxes
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(6, (i) => _OtpBox(
+                  controller: _digitControllers[i],
+                  focusNode: _focusNodes[i],
+                  index: i,
+                  onChanged: (v) => _onDigitChanged(v, i),
+                  filled: _digitControllers[i].text.isNotEmpty,
+                )),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Resend row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text("Didn't receive OTP? ", style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+                  _secondsLeft > 0
+                      ? Text(
+                    'Resend in 0:${_secondsLeft.toString().padLeft(2, '0')}',
+                    style: const TextStyle(fontSize: 13, color: _teal, fontWeight: FontWeight.w600),
+                  )
+                      : GestureDetector(
+                    onTap: () { setState(() => _secondsLeft = 28); _startTimer(); },
+                    child: const Text('Resend', style: TextStyle(fontSize: 13, color: _teal, fontWeight: FontWeight.w700)),
                   ),
-                ),
+                ],
+              ),
 
-                const SizedBox(height: 8),
+              const Spacer(flex: 1),
 
-                /// Subtitle
-                Text(
-                  'Enter the 6-digit code sent to ${widget.formattedPhone}',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
+              // Verify button
+              _VerifyButton(isVerifying: isVerifying, onTap: _verifyOtp),
 
-                const SizedBox(height: 32),
+              const SizedBox(height: 16),
 
-                /// OTP Field
-                TextField(
-                  controller: _otpController,
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.center,
-                  maxLength: 6,
-                  enabled: !isVerifying,
-                  style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 16,
-                  ),
-                  decoration: InputDecoration(
-                    counterText: '',
-                    hintText: '------',
-                    hintStyle: TextStyle(
-                      color: Colors.grey,
-                      letterSpacing: 16,
-                    ),
-                    filled: true,
-                    fillColor: Colors.grey[50],
-                    border: OutlineInputBorder(
-                      borderRadius:
-                      BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius:
-                      BorderRadius.circular(12),
-                      borderSide:
-                      BorderSide(color: Colors.grey[300]!),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius:
-                      BorderRadius.circular(12),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF00897B),
-                        width: 2,
-                      ),
-                    ),
-                    contentPadding:
-                    const EdgeInsets.symmetric(
-                      vertical: 20,
-                    ),
-                  ),
-                ),
+              // Change number
+              GestureDetector(
+                onTap: isVerifying ? null : () => Navigator.pop(context),
+                child: const Text('Change Number', style: TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+              ),
 
-                const SizedBox(height: 24),
+              const Spacer(flex: 1),
 
-                /// Verify Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed:
-                    isVerifying ? null : _verifyOtp,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                      const Color(0xFF00897B),
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                        BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: isVerifying
-                        ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child:
-                      CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor:
-                        AlwaysStoppedAnimation<
-                            Color>(
-                          Colors.white,
-                        ),
-                      ),
-                    )
-                        : const Text(
-                      'VERIFY CODE',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight:
-                        FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                /// Cancel
-                TextButton(
-                  onPressed: isVerifying
-                      ? null
-                      : () => Navigator.pop(context),
-                  child: Text(
-                    'Cancel',
-                    style: TextStyle(
-                      color: isVerifying
-                          ? Colors.grey
-                          : const Color(0xFF00897B),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              // Security note
+              _SecurityNote(),
+            ],
           ),
         ),
       ),
@@ -237,47 +183,144 @@ class _OtpVerificationScreenState
   }
 
   Future<void> _verifyOtp() async {
-    if (_otpController.text.trim().length != 6) {
+    final otp = _composedOtp;
+    if (otp.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter 6-digit code'),
-          backgroundColor: Colors.red,
-        ),
+        const SnackBar(content: Text('Please enter 6-digit code'), backgroundColor: Colors.red),
       );
       return;
     }
-
     setState(() => isVerifying = true);
-
     try {
       if (widget.isLogin) {
-        await _finalizePhoneLogin(
-          widget.verificationId,
-          _otpController.text.trim(),
-        );
+        await _finalizePhoneLogin(widget.verificationId, otp);
       } else {
-        await _finalizeRegistration(
-          widget.verificationId,
-          _otpController.text.trim(),
-          widget.userType!,
-        );
+        await _finalizeRegistration(widget.verificationId, otp, widget.userType!);
       }
     } finally {
-      if (mounted) {
-        setState(() => isVerifying = false);
-      }
+      if (mounted) setState(() => isVerifying = false);
     }
   }
 
-  Future<void> _finalizePhoneLogin(
-      String verificationId, String otp) async {
-
+  Future<void> _finalizePhoneLogin(String verificationId, String otp) async {
+    // unchanged logic placeholder
   }
 
-  Future<void> _finalizeRegistration(
-      String verificationId,
-      String otp,
-      String userType) async {
+  Future<void> _finalizeRegistration(String verificationId, String otp, String userType) async {
+    // unchanged logic placeholder
+  }
+}
 
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+class _OtpBox extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final int index;
+  final void Function(String) onChanged;
+  final bool filled;
+
+  const _OtpBox({
+    required this.controller,
+    required this.focusNode,
+    required this.index,
+    required this.onChanged,
+    required this.filled,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      width: 44,
+      height: 52,
+      decoration: BoxDecoration(
+        color: filled ? const Color(0xFFEFF6F5) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: filled ? const Color(0xFF0D9488) : const Color(0xFFE2E8F0),
+          width: filled ? 1.5 : 1,
+        ),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
+      ),
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        maxLength: 1,
+        onChanged: onChanged,
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF0D4F4A),
+        ),
+        decoration: const InputDecoration(
+          counterText: '',
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.zero,
+        ),
+      ),
+    );
+  }
+}
+
+class _VerifyButton extends StatelessWidget {
+  final bool isVerifying;
+  final VoidCallback onTap;
+  const _VerifyButton({required this.isVerifying, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: isVerifying ? null : onTap,
+      child: Container(
+        width: double.infinity,
+        height: 54,
+        decoration: BoxDecoration(
+          color: const Color(0xFF0D4F4A),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: const Color(0xFF0D9488).withOpacity(0.3), blurRadius: 14, offset: const Offset(0, 5))],
+        ),
+        child: Center(
+          child: isVerifying
+              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Verify', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+              SizedBox(width: 8),
+              Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SecurityNote extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.shield_rounded, size: 18, color: Colors.grey[400]),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Your security is our priority. We use two-factor authentication to keep your medical data safe.',
+              style: TextStyle(fontSize: 11, color: Color(0xFF64748B), height: 1.5),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

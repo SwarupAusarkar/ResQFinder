@@ -54,7 +54,30 @@ class ReviewService {
       return false;
     }
   }
+  /// Fetch provider's rating statistics and summary from the providers model
+  Future<Map<String, dynamic>> getProviderStats(String providerId) async {
+    try {
+      final doc = await _firestore.collection('providers').doc(providerId).get();
 
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {
+          'avgRating': data['avgRating'] ?? 0.0,
+          'reviewCount': data['reviewCount'] ?? 0,
+          'summaryReview': data['summaryReview'] ?? "No summary available yet.",
+        };
+      } else {
+        throw Exception("Provider not found");
+      }
+    } catch (e) {
+      print('❌ Error fetching provider stats: $e');
+      return {
+        'avgRating': 0.0,
+        'reviewCount': 0,
+        'summaryReview': "Error loading summary.",
+      };
+    }
+  }
   /// Get all reviews for a provider
   Future<List<Review>> getProviderReviews(String providerId) async {
     try {

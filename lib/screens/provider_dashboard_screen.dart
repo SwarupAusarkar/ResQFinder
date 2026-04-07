@@ -1,3 +1,4 @@
+import 'package:emergency_res_loc_new/screens/InventoryManagementScreen.dart';
 import 'package:emergency_res_loc_new/screens/manage_inventory_screen.dart';
 import 'package:emergency_res_loc_new/screens/provider_registration_screen.dart';
 import 'package:emergency_res_loc_new/services/expiration_logic_service.dart';
@@ -257,13 +258,13 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
                 () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const ManageInventoryScreen(),
+                    builder: (context) => const InventoryMgmtScreen(),
                   ),
                 ),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => _authService.signOut(),
+            onPressed: () =>_signOut(context),
           ),
         ],
       ),
@@ -544,4 +545,29 @@ class _ProviderDashboardScreenState extends State<ProviderDashboardScreen> {
         return "No requests found";
     }
   }
-}
+
+  Future<void> _signOut(BuildContext context) async {
+    try {
+      print("👋 Signing out from ServiceSelectionScreen...");
+      await AuthService().signOut();
+
+      if (context.mounted) {
+        print("→ Navigating to home screen");
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/',
+              (route) => false,
+        );
+      }
+    } catch (e) {
+      print("❌ Sign out error: $e");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sign out failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  } }
