@@ -150,7 +150,7 @@ class Provider {
   final double longitude;
   double distance;
   final bool isAvailable;
-  final int rating;
+  final double rating;
   final String description;
   final List<InventoryItem> inventory;
   final int noOfApprovedRequests;
@@ -202,7 +202,7 @@ class Provider {
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
       distance: (json['distance'] as num?)?.toDouble() ?? 0.0,
       isAvailable: json['isAvailable'] ?? true,
-      rating: (json['rating'] as num?)?.toInt() ?? 0,
+      rating: (json['rating'] as double?) ?? 0,
       description: json['description'] ?? '',
       inventory: (json['inventory'] as List<dynamic>? ?? [])
           .map((item) => InventoryItem.fromMap(item as Map<String, dynamic>))

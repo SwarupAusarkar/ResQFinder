@@ -1,3 +1,4 @@
+// lib/screens/send_request_screen.dart
 import 'package:emergency_res_loc_new/models/inventory_item_model.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -5,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../data/master_inventory_list.dart';
 import '../services/auth_service.dart';
 import '../services/location_service.dart';
+import '../screens/SearchingProviderScreen.dart';
 
 class SendRequestScreen extends StatefulWidget {
   final InventoryItem? inventoryItem;
@@ -15,9 +17,11 @@ class SendRequestScreen extends StatefulWidget {
 }
 
 class _SendRequestScreenState extends State<SendRequestScreen> {
+  // ── State (unchanged) ────────────────────────────────────────────────────────
   final _formKey = GlobalKey<FormState>();
   final _quantityController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _recipientController = TextEditingController();
   final AuthService _authService = AuthService();
 
   String? _selectedItem;
@@ -27,12 +31,19 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
   double lat = 0.0, long = 0.0;
   String loc = "";
 
+  // Urgency: 0=Low, 1=Medium, 2=Critical
+  int _urgencyLevel = 2;
+
+  // ── Design tokens ────────────────────────────────────────────────────────────
+  static const _teal = Color(0xFF0D4F4A);
+  static const _tealLight = Color(0xFF0D9488);
+  static const _bgColor = Color(0xFFEFF6F5);
+
+  // ── Lifecycle ─────────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
     _initLocation();
-
-    // Null-safe pre-fill if navigating from inventory
     if (widget.inventoryItem != null) {
       _selectedItem = widget.inventoryItem?.name;
       _selectedUnit = widget.inventoryItem?.unit;
@@ -43,74 +54,48 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
   void dispose() {
     _quantityController.dispose();
     _descriptionController.dispose();
+    _recipientController.dispose();
     super.dispose();
   }
 
+  // ── Logic (unchanged) ────────────────────────────────────────────────────────
   Future<void> _initLocation() async {
     final pos = await LocationService.getCurrentLocation();
     if (pos != null && mounted) {
-      setState(() {
-        lat = pos.latitude;
-        long = pos.longitude;
-      });
-
+      setState(() { lat = pos.latitude; long = pos.longitude; });
       final address = await LocationService.getAddressFromLatLng(lat, long);
-      if (mounted && address != null) {
-        setState(() => loc = address);
-      }
+      if (mounted && address != null) setState(() => loc = address);
     }
   }
 
   void _onResourceChanged(String? newValue) {
     if (newValue == null) return;
-
-    // Find unit from master list based on name
     final foundItem = masterInventoryList.firstWhere(
           (item) => item.name == newValue,
       orElse: () => const MasterInventoryItem(name: '', unit: 'Units'),
     );
-
-    setState(() {
-      _selectedItem = newValue;
-      _selectedUnit = foundItem.unit;
-    });
+    setState(() { _selectedItem = newValue; _selectedUnit = foundItem.unit; });
   }
 
   Future<void> _sendBroadcastRequest() async {
-    // 1. Logic Guard: Ensure resource is selected
-    if (_selectedItem == null) {
-      _showSnackBar("Please select a resource type", Colors.orange);
-      return;
-    }
-
-    // 2. Logic Guard: Form validation
+    if (_selectedItem == null) { _showSnackBar("Please select a resource type", Colors.orange); return; }
     if (!_formKey.currentState!.validate()) return;
-
-    // 3. Logic Guard: Location check
     if (lat == 0.0) {
       await _initLocation();
       if (!mounted) return;
-      if (lat == 0.0) {
-        _showSnackBar("GPS Location required for SOS", Colors.red);
-        return;
-      }
+      if (lat == 0.0) { _showSnackBar("GPS Location required for SOS", Colors.red); return; }
     }
 
     setState(() => _isSending = true);
-
     try {
       final user = _authService.currentUser;
       if (user == null) throw "User session expired. Please log in.";
-
-      // 4. Data Guard: Safely fetch user data across collections
       final userDoc = await _authService.getUserData(user.uid);
       if (!mounted) return;
-
       final Map<String, dynamic> userData = userDoc?.data() as Map<String, dynamic>? ?? {};
       final String requesterName = userData['fullName'] ?? userData['name'] ?? 'Anonymous';
       final String requesterPhone = userData['phone'] ?? 'N/A';
 
-      // 5. Build and Push Payload
       await FirebaseFirestore.instance.collection('emergency_requests').add({
         'masterRequestId': const Uuid().v4(),
         'requesterId': user.uid,
@@ -135,7 +120,11 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
 
       if (mounted) {
         _showSnackBar("Emergency Alert Broadcasted!", const Color(0xFF00897B));
-        Navigator.pop(context);
+        // Navigate to searching screen instead of popping
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const SearchingProvidersScreen()),
+        );
       }
     } catch (e) {
       if (mounted) _showSnackBar("Failed: $e", Colors.red);
@@ -144,193 +133,478 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
     }
   }
 
+  // ── Build ─────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('Create Emergency Request',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildSectionTitle("Emergency Type"),
-              const SizedBox(height: 12),
-              _buildTypeChips(),
-              const SizedBox(height: 28),
-
-              _buildSectionTitle("Resource Details"),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                // FIX: Ensure _selectedItem actually exists in the list to prevent the crash
-                value: (masterInventoryList.any((e) => e.name == _selectedItem))
-                    ? _selectedItem
-                    : null,
-                isExpanded: true,
-                decoration: _inputDecoration("Select Resource"),
-
-                // FIX: Use .toSet() before .toList() if you have duplicate names in your master list
-                items: masterInventoryList
-                    .map((e) => e.name)
-                    .toSet() // This removes duplicates automatically
-                    .map((name) => DropdownMenuItem(
-                  value: name,
-                  child: Text(name),
-                ))
-                    .toList(),
-
-                onChanged: _onResourceChanged,
-                validator: (v) => v == null ? "Please select an item" : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _quantityController,
-                keyboardType: TextInputType.number,
-                decoration: _inputDecoration("Quantity (${_selectedUnit ?? 'Units'})"),
-                validator: (v) => (v == null || v.isEmpty) ? "Required" : null,
-              ),
-              const SizedBox(height: 28),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildSectionTitle("Search Radius"),
-                  Text("${_searchRadius.toStringAsFixed(1)} km",
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF00897B))),
-                ],
-              ),
-              Slider(
-                value: _searchRadius, min: 1, max: 20, divisions: 19,
-                activeColor: const Color(0xFF00897B),
-                inactiveColor: Colors.teal.withOpacity(0.1),
-                onChanged: (v) => setState(() => _searchRadius = v),
-              ),
-              const SizedBox(height: 20),
-
-              _buildSectionTitle("Medical Notes / Urgency"),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _descriptionController,
-                maxLines: 3,
-                decoration: _inputDecoration("Enter specific details or address clues..."),
-              ),
-              const SizedBox(height: 40),
-              _buildSubmitButton(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- UI Component Helper Methods ---
-
-  Widget _buildTypeChips() {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _buildEmergencyTypeChip(Icons.local_hospital, 'Medical', const Color(0xFF00897B), true),
-        _buildEmergencyTypeChip(Icons.local_fire_department, 'Fire', Colors.orange, false),
-        _buildEmergencyTypeChip(Icons.car_crash, 'Accident', Colors.red, false),
-        _buildEmergencyTypeChip(Icons.security, 'Security', Colors.blue, false),
-      ],
-    );
-  }
-
-  Widget _buildSubmitButton() {
-    return Container(
-      width: double.infinity,
-      height: 60,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: const LinearGradient(colors: [Color(0xFF00897B), Color(0xFF00796B)]),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF00897B).withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: _isSending ? null : _sendBroadcastRequest,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-        child: _isSending
-            ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+      backgroundColor: _bgColor,
+      body: SafeArea(
+        child: Column(
           children: [
-            Icon(Icons.podcasts, color: Colors.white),
-            SizedBox(width: 12),
-            Text("BROADCAST SOS", style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+            _RequestScreenHeader(onBack: () => Navigator.pop(context)),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 8),
+                      _SectionLabel(label: 'RESOURCE & QUANTITY'),
+                      const SizedBox(height: 12),
+                      _ResourceDropdown(
+                        selectedItem: _selectedItem,
+                        selectedUnit: _selectedUnit,
+                        onChanged: _onResourceChanged,
+                      ),
+                      const SizedBox(height: 12),
+                      _QuantityField(
+                        controller: _quantityController,
+                        unit: _selectedUnit ?? 'Units',
+                      ),
+                      const SizedBox(height: 20),
+                      _SectionLabel(label: 'RECIPIENT NAME'),
+                      const SizedBox(height: 12),
+                      _StyledTextField(
+                        controller: _recipientController,
+                        hint: 'Enter recipient name',
+                        icon: Icons.person_outline_rounded,
+                      ),
+                      const SizedBox(height: 20),
+                      _SectionLabel(label: 'URGENCY LEVEL'),
+                      const SizedBox(height: 12),
+                      _UrgencySelector(
+                        selected: _urgencyLevel,
+                        onChanged: (v) => setState(() => _urgencyLevel = v),
+                      ),
+                      const SizedBox(height: 20),
+                      _SectionLabel(label: 'PICKUP / DELIVERY POINT'),
+                      const SizedBox(height: 12),
+                      _LocationCard(address: loc.isEmpty ? 'Fetching location...' : loc),
+                      const SizedBox(height: 32),
+                      _RequestNowButton(
+                        isSending: _isSending,
+                        onTap: _sendBroadcastRequest,
+                      ),
+                      const SizedBox(height: 16),
+                      _SecurityNote(),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black87));
+  void _showSnackBar(String msg, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      margin: const EdgeInsets.all(16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
   }
+}
 
-  InputDecoration _inputDecoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      filled: true,
-      fillColor: Colors.grey[50],
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey[200]!)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey[200]!)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF00897B), width: 1.5)),
-    );
-  }
+// ── Sub-components ────────────────────────────────────────────────────────────
 
-  Widget _buildEmergencyTypeChip(IconData icon, String label, Color color, bool isSelected) {
+class _RequestScreenHeader extends StatelessWidget {
+  final VoidCallback onBack;
+  const _RequestScreenHeader({required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: isSelected ? color.withOpacity(0.1) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isSelected ? color : Colors.grey[200]!, width: 1.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: isSelected ? color : Colors.grey),
-          const SizedBox(width: 8),
-          Text(label, style: TextStyle(color: isSelected ? color : Colors.grey, fontWeight: FontWeight.w600, fontSize: 13)),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: onBack,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Color(0xFF0D4F4A)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'NEW VITAL REQUEST',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0D9488),
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          RichText(
+            text: const TextSpan(
+              text: 'Specify your ',
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Color(0xFF0D4F4A), height: 1.1),
+              children: [
+                TextSpan(
+                  text: 'needs.',
+                  style: TextStyle(color: Color(0xFF0D9488)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Our Calm Guardian system ensures your request reaches the right responder with absolute clarity.',
+            style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.5),
+          ),
         ],
       ),
     );
   }
+}
 
-  void _showSnackBar(String msg, Color color) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: color,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        )
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  const _SectionLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w800,
+        color: Color(0xFF94A3B8),
+        letterSpacing: 1.5,
+      ),
+    );
+  }
+}
+
+class _ResourceDropdown extends StatelessWidget {
+  final String? selectedItem;
+  final String? selectedUnit;
+  final void Function(String?) onChanged;
+
+  const _ResourceDropdown({
+    required this.selectedItem,
+    required this.selectedUnit,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _CardContainer(
+      child: DropdownButtonFormField<String>(
+        value: (masterInventoryList.any((e) => e.name == selectedItem)) ? selectedItem : null,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'TYPE',
+          labelStyle: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.w700, letterSpacing: 1),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.zero,
+        ),
+        items: masterInventoryList
+            .map((e) => e.name)
+            .toSet()
+            .map((name) => DropdownMenuItem(value: name, child: Text(name)))
+            .toList(),
+        onChanged: onChanged,
+        validator: (v) => v == null ? 'Please select an item' : null,
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF0D4F4A)),
+        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF0D9488)),
+        dropdownColor: Colors.white,
+      ),
+    );
+  }
+}
+
+class _QuantityField extends StatelessWidget {
+  final TextEditingController controller;
+  final String unit;
+
+  const _QuantityField({required this.controller, required this.unit});
+
+  @override
+  Widget build(BuildContext context) {
+    return _CardContainer(
+      child: TextFormField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF0D4F4A)),
+        decoration: InputDecoration(
+          labelText: 'AMOUNT',
+          labelStyle: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.w700, letterSpacing: 1),
+          hintText: '0 $unit',
+          hintStyle: TextStyle(color: Colors.grey[300]),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.zero,
+        ),
+      ),
+    );
+  }
+}
+
+class _StyledTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final IconData icon;
+
+  const _StyledTextField({required this.controller, required this.hint, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return _CardContainer(
+      child: TextField(
+        controller: controller,
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF0D4F4A)),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: Color(0xFFCBD5E1), fontWeight: FontWeight.w400),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.zero,
+        ),
+      ),
+    );
+  }
+}
+
+class _CardContainer extends StatelessWidget {
+  final Widget child;
+  const _CardContainer({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _UrgencySelector extends StatelessWidget {
+  final int selected;
+  final void Function(int) onChanged;
+
+  const _UrgencySelector({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final options = [
+      _UrgencyOption(label: 'Low', icon: Icons.sentiment_satisfied_alt_rounded, color: const Color(0xFF64748B)),
+      _UrgencyOption(label: 'Medium', icon: Icons.warning_amber_rounded, color: const Color(0xFFF59E0B)),
+      _UrgencyOption(label: 'Critical', icon: Icons.emergency_rounded, color: const Color(0xFFDC2626)),
+    ];
+
+    return Row(
+      children: List.generate(options.length, (i) {
+        final opt = options[i];
+        final isSelected = selected == i;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: i < options.length - 1 ? 8 : 0),
+            child: GestureDetector(
+              onTap: () => onChanged(i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: isSelected ? opt.color : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isSelected ? opt.color : const Color(0xFFE2E8F0),
+                    width: 1.5,
+                  ),
+                  boxShadow: isSelected
+                      ? [BoxShadow(color: opt.color.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))]
+                      : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4)],
+                ),
+                child: Column(
+                  children: [
+                    Icon(opt.icon, size: 22, color: isSelected ? Colors.white : opt.color),
+                    const SizedBox(height: 4),
+                    Text(
+                      opt.label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: isSelected ? Colors.white : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _UrgencyOption {
+  final String label;
+  final IconData icon;
+  final Color color;
+  const _UrgencyOption({required this.label, required this.icon, required this.color});
+}
+
+class _LocationCard extends StatelessWidget {
+  final String address;
+  const _LocationCard({required this.address});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 110,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFFDFF1EF),
+      ),
+      child: Stack(
+        children: [
+          // Decorative map-like gradient
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFB2DFDB), Color(0xFFDFF1EF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Location pin overlay
+          Positioned(
+            bottom: 12,
+            left: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8)],
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.location_on_rounded, color: Color(0xFF0D9488), size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      address,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0D4F4A)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Icon(Icons.edit_rounded, size: 14, color: Color(0xFF94A3B8)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestNowButton extends StatelessWidget {
+  final bool isSending;
+  final VoidCallback onTap;
+
+  const _RequestNowButton({required this.isSending, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: isSending ? null : onTap,
+      child: Container(
+        width: double.infinity,
+        height: 58,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF0D4F4A), Color(0xFF0D9488)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0D9488).withOpacity(0.35),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Center(
+          child: isSending
+              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Request Now',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 16),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SecurityNote extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.shield_rounded, size: 13, color: Colors.grey[400]),
+        const SizedBox(width: 5),
+        Text(
+          'Secured by Emergeo Medical Response Protocol',
+          style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+        ),
+      ],
     );
   }
 }

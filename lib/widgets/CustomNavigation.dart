@@ -1,98 +1,71 @@
 import 'package:flutter/material.dart';
+import '../constants.dart';
 
-// Create a simple model to hold Tab data
-class NavItem {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-
-  NavItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-  });
-}
-
-class CustomBottomNav extends StatelessWidget {
+class CustomBottomNavBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
-  final List<NavItem> items; // Dynamic list of items
+  final List<Map<String, dynamic>> tabs;
 
-  const CustomBottomNav({
+  const CustomBottomNavBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
-    required this.items, // Pass any number of items here
+    required this.tabs,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      // Padding makes it "Floating"
-      padding: const EdgeInsets.all(16.0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24), // Rounded floating look
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 20,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: List.generate(items.length, (index) {
-            return _buildNavItem(
-              item: items[index],
-              index: index,
-            );
-          }),
-        ),
+    return Container(
+      height: 65,
+      margin: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 15,
+          )
+        ],
       ),
-    );
-  }
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: tabs.map((tab) {
+          final index = tab['index'];
+          final isSelected = index == currentIndex;
 
-  Widget _buildNavItem({
-    required NavItem item,
-    required int index,
-  }) {
-    final isActive = currentIndex == index;
-    const activeColor = Color(0xFF00897B);
-
-    return GestureDetector(
-      onTap: () => onTap(index),
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          // Translucent shade for active tab
-          color: isActive ? activeColor.withOpacity(0.12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isActive ? item.activeIcon : item.icon,
-              color: isActive ? activeColor : Colors.grey[500],
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              item.label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-                color: isActive ? activeColor : Colors.grey[500],
+          return GestureDetector(
+            onTap: () => onTap(index),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? primaryColor.withOpacity(0.1)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    tab['icon'],
+                    color: isSelected ? primaryColor : inactiveColor,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    tab['name'],
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? primaryColor : inactiveColor,
+                    ),
+                  )
+                ],
               ),
             ),
-          ],
-        ),
+          );
+        }).toList(),
       ),
     );
   }

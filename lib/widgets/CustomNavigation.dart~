@@ -1,0 +1,117 @@
+// lib/widgets/customNavigation.dart
+import 'package:flutter/material.dart';
+
+class CustomBottomNavBar extends StatelessWidget {
+  final int currentIndex;
+  final Function(int) onTap;
+  final List<Map<String, dynamic>> tabs;
+  final Color primaryColor;
+  final Color inactiveColor;
+
+  const CustomBottomNavBar({
+    super.key,
+    required this.currentIndex,
+    required this.onTap,
+    required this.tabs,
+    this.primaryColor = const Color(0xFF00897B), // Teal
+    this.inactiveColor = const Color(0xFF9E9E9E),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(tabs.length, (index) {
+              final isSelected = currentIndex == index;
+              final tab = tabs[index];
+
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => onTap(index),
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOutCubic,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Icon with animated background
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Animated circle background
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              width: isSelected ? 50 : 0,
+                              height: isSelected ? 50 : 0,
+                              decoration: BoxDecoration(
+                                color: primaryColor.withOpacity(0.12),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            // Icon
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              padding: const EdgeInsets.all(8),
+                              child: Icon(
+                                tab['icon'],
+                                color: isSelected ? primaryColor : inactiveColor,
+                                size: isSelected ? 28 : 24,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        // Label
+                        AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 300),
+                          style: TextStyle(
+                            color: isSelected ? primaryColor : inactiveColor,
+                            fontSize: isSelected ? 12 : 11,
+                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                            letterSpacing: 0.3,
+                          ),
+                          child: Text(
+                            tab['name'],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        // Active indicator dot
+                        const SizedBox(height: 2),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          width: isSelected ? 6 : 0,
+                          height: isSelected ? 6 : 0,
+                          decoration: BoxDecoration(
+                            color: primaryColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+}
