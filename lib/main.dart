@@ -12,6 +12,7 @@ import 'package:emergency_res_loc_new/screens/requester_profile_screen.dart';
 import 'package:emergency_res_loc_new/screens/requester_registeration.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth_screen.dart';
@@ -47,7 +48,40 @@ void main() async {
   await NotificationHelper.instance.init();
 
   _requestLocationPermission();
+  FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
+  const AndroidNotificationChannel tier1Channel = AndroidNotificationChannel(
+    'emergency_high_alert',
+    'Emergency Alerts',
+    description: 'Critical life-saving alerts',
+    importance: Importance.max,
+    sound: RawResourceAndroidNotificationSound('notification_tone'),
+    playSound: true,
+    enableVibration: true,
+  );
+
+  const AndroidNotificationChannel tier2Channel = AndroidNotificationChannel(
+    'emergency_channel_id',
+    'Standard Updates',
+    description: 'Offers and progress updates',
+    importance: Importance.high,
+    playSound: true,
+  );
+
+  const AndroidNotificationChannel tier3Channel = AndroidNotificationChannel(
+    'general_alerts',
+    'General Reminders',
+    description: 'Review prompts and tips',
+    importance: Importance.low,
+    playSound: false,
+  );
+
+  final androidPlugin = flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+  await androidPlugin?.createNotificationChannel(tier1Channel);
+  await androidPlugin?.createNotificationChannel(tier2Channel);
+  await androidPlugin?.createNotificationChannel(tier3Channel);
   runApp(const EmergencyResourceLocatorApp());
 }
 

@@ -1,3 +1,4 @@
+
 //
 // import 'package:flutter/material.dart';
 // import 'package:firebase_messaging/firebase_messaging.dart';
@@ -493,6 +494,7 @@
 //   }
 // }
 // lib/screens/auth_screen.dart
+
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'OTP_verification_screen.dart';
@@ -616,6 +618,19 @@ class _AuthScreenState extends State<AuthScreen> {
       onCodeSent: (verificationId, resendToken) {
         if (mounted) {
           setState(() => _isLoading = false);
+
+          // Navigator.push(
+          //   context,
+          //   MaterialPageRoute(
+          //     builder: (_) => OtpVerificationScreen(
+          //       verificationId: verificationId,
+          //       isLogin: false,
+          //       userType: userType,
+          //       formattedPhone: _formattedPhone,
+          //     ),
+          //   ),
+          // );
+
           _showOtpDialog(verificationId, userType, isLogin: false);
         }
       },
@@ -740,7 +755,7 @@ class _AuthScreenState extends State<AuthScreen> {
         userType: userType,
         phone: _formattedPhone,
         hfrId: userType == 'provider' ? _hfrController.text.trim() : null,
-        nmcId: userType == 'provider' ? _nmcController.text.trim() : null,
+        nmcId: userType == 'provider' ? _nmcController.text.trim() : null, isHFRVerified: true, isNMCVerified: true,
       );
       if (user != null && mounted) {
         Navigator.pushReplacementNamed(context, userType == 'provider' ? '/offer-approval' : '/service-selection');

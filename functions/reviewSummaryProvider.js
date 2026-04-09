@@ -5,7 +5,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const db = getFirestore();
 // Ensure you have the API key in your environment variables
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-
+const REGION = "asia-south1";
 exports.onReviewCreated = onDocumentCreated(
   "reviews/{reviewId}", // Ensure this matches your collection name exactly
   async (event) => {

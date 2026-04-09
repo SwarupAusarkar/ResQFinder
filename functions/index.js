@@ -19,3 +19,4 @@ exports.dailyInventoryReminder = n.dailyInventoryReminder;
 exports.sendReviewNotification=n.sendReviewNotification;
 const r=require("./reviewSummaryProvider");
 exports.onReviewCreated=r.onReviewCreated;
+exports.reAlertPendingRequests=n.reAlertPendingRequests;

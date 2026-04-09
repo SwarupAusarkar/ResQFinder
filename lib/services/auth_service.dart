@@ -50,7 +50,7 @@ class AuthService {
     String? hfrId,
     String? nmcId,
     File? certificateImage,
-    List<File>? facilityImages,
+    List<File>? facilityImages, required bool isHFRVerified, required bool isNMCVerified,
   }) async {
     User? user;
     try {
