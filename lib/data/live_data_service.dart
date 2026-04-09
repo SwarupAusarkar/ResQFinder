@@ -82,6 +82,29 @@ class LiveDataService {
         final data = json.decode(response.body);
         final elements = data["elements"] as List<dynamic>;
 
+        allProviders.addAll(
+          elements.map((e) {
+            return Provider(
+              id: "osm_${e["id"]}",
+              name: e["tags"]?["name"] ?? "Unknown ${serviceType.capitalize()}",
+              type: serviceType,
+              phone: e["tags"]?["phone"] ?? "N/A",
+              address: e["tags"]?["addr:full"] ?? "${e["lat"]}, ${e["lon"]}",
+              latitude: e["lat"]?.toDouble() ?? latitude,
+              longitude: e["lon"]?.toDouble() ?? longitude,
+              distance: 0.0,
+              isAvailable: true,
+              rating: 4,
+              description: "Live $serviceType from OpenStreetMap",
+              inventory: [],
+              noOfApprovedRequests: 0,
+              verificationType: '',
+              fcmToken: '',
+               // OSM data won't have inventory
+            );
+          }),
+        );
+
         allProviders.addAll(elements.map((e) {
           return Provider(
             id: "osm_${e["id"]}",
@@ -101,6 +124,7 @@ class LiveDataService {
             fcmToken: '',
           );
         }));
+
       }
     } catch (e) {
       // OFFLINE FALLBACK: If HTTP post fails (no internet), load from SharedPreferences

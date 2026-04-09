@@ -85,7 +85,7 @@ class _ApprovalScreenState extends State<ApprovalScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Manage Offers"),
-        backgroundColor: Colors.red[700],
+        backgroundColor: Color(0xFF00897B),
         elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
