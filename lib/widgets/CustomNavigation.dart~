@@ -1,13 +1,20 @@
+// lib/widgets/customNavigation.dart
 import 'package:flutter/material.dart';
 
-class CustomBottomNav extends StatelessWidget {
+class CustomBottomNavBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
+  final List<Map<String, dynamic>> tabs;
+  final Color primaryColor;
+  final Color inactiveColor;
 
-  const CustomBottomNav({
+  const CustomBottomNavBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    required this.tabs,
+    this.primaryColor = const Color(0xFF00897B), // Teal
+    this.inactiveColor = const Color(0xFF9E9E9E),
   });
 
   @override
@@ -17,9 +24,9 @@ class CustomBottomNav extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
           ),
         ],
       ),
@@ -28,81 +35,81 @@ class CustomBottomNav extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(
-                icon: Icons.home_outlined,
-                activeIcon: Icons.home,
-                label: 'Dashboard',
-                index: 0,
-              ),
-              _buildNavItem(
-                icon: Icons.receipt_long_outlined,
-                activeIcon: Icons.receipt_long,
-                label: 'Requests',
-                index: 1,
-              ),
-              _buildNavItem(
-                icon: Icons.analytics_outlined,
-                activeIcon: Icons.analytics,
-                label: 'Analytics',
-                index: 2,
-              ),
-              _buildNavItem(
-                icon: Icons.person_outline,
-                activeIcon: Icons.person,
-                label: 'Profile',
-                index: 3,
-              ),
-              _buildNavItem(
-                icon: Icons.settings_outlined,
-                activeIcon: Icons.settings,
-                label: 'Settings',
-                index: 4,
-              ),
-            ],
+            children: List.generate(tabs.length, (index) {
+              final isSelected = currentIndex == index;
+              final tab = tabs[index];
+
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => onTap(index),
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOutCubic,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Icon with animated background
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Animated circle background
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              width: isSelected ? 50 : 0,
+                              height: isSelected ? 50 : 0,
+                              decoration: BoxDecoration(
+                                color: primaryColor.withOpacity(0.12),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            // Icon
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              padding: const EdgeInsets.all(8),
+                              child: Icon(
+                                tab['icon'],
+                                color: isSelected ? primaryColor : inactiveColor,
+                                size: isSelected ? 28 : 24,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        // Label
+                        AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 300),
+                          style: TextStyle(
+                            color: isSelected ? primaryColor : inactiveColor,
+                            fontSize: isSelected ? 12 : 11,
+                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                            letterSpacing: 0.3,
+                          ),
+                          child: Text(
+                            tab['name'],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        // Active indicator dot
+                        const SizedBox(height: 2),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          width: isSelected ? 6 : 0,
+                          height: isSelected ? 6 : 0,
+                          decoration: BoxDecoration(
+                            color: primaryColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem({
-    required IconData icon,
-    required IconData activeIcon,
-    required String label,
-    required int index,
-  }) {
-    final isActive = currentIndex == index;
-
-    return GestureDetector(
-      onTap: () => onTap(index),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: isActive
-            ? BoxDecoration(
-          color: const Color(0xFF00897B).withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-        )
-            : null,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              color: isActive ? const Color(0xFF00897B) : Colors.grey[600],
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                color: isActive ? const Color(0xFF00897B) : Colors.grey[600],
-              ),
-            ),
-          ],
         ),
       ),
     );

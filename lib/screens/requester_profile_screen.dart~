@@ -22,7 +22,7 @@ class RequesterProfileScreen extends StatefulWidget {
 }
 
 class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
-  // ── State ──
+  // ── State (ALL UNCHANGED) ─────────────────────────────────────────────────
   List<Map<String, dynamic>> _savedLocations = [];
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
@@ -43,7 +43,7 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
     _loadUserData();
   }
 
-  // ── Logic ──
+  // ── Logic (unchanged) ────────────────────────────────────────────────────────
   Future<void> _loadUserData() async {
     final user = AuthService().currentUser;
     if (user == null) return;
@@ -165,6 +165,7 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
     }
   }
 
+  // ── Build ─────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -191,6 +192,7 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ── Identity ─────────────────────────────────────────
                     _ProfileSectionCard(
                       title: 'Identity',
                       icon: Icons.person_rounded,
@@ -200,6 +202,8 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                    // ── Critical Medical Info ────────────────────────────
                     _ProfileSectionCard(
                       title: 'Critical Medical Info',
                       icon: Icons.medical_services_rounded,
@@ -212,6 +216,8 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                    // ── Emergency Settings ───────────────────────────────
                     _ProfileSectionCard(
                       title: 'Emergency Settings',
                       icon: Icons.notifications_active_rounded,
@@ -221,6 +227,8 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                    // ── Emergency Contacts ───────────────────────────────
                     _SectionHeader(
                       title: 'Emergency Contacts',
                       actionLabel: 'Add New',
@@ -234,6 +242,8 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
                       onRemove: (c) => setState(() => _emergencyChecklist.remove(c)),
                     ),
                     const SizedBox(height: 16),
+
+                    // ── Saved Offline Regions ────────────────────────────
                     _SectionHeader(
                       title: 'Saved Offline Regions',
                       actionLabel: 'Add Trip',
@@ -254,9 +264,7 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
                           await FirebaseFirestore.instance
                               .collection('requesters')
                               .doc(user.uid)
-                              .update({
-                            'savedLocations': FieldValue.arrayRemove([loc])
-                          });
+                              .update({'savedLocations': FieldValue.arrayRemove([loc])});
                           _loadUserData();
                         }
                       },
@@ -266,8 +274,8 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -313,8 +321,7 @@ class _ProfileSliverAppBar extends StatelessWidget {
                 children: [
                   Icon(Icons.check_rounded, color: Colors.white, size: 14),
                   SizedBox(width: 4),
-                  Text('Save',
-                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text('Save', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
@@ -348,6 +355,7 @@ class _ProfileSliverAppBar extends StatelessWidget {
                       ),
                       child: const Icon(Icons.person_rounded, size: 38, color: Colors.white),
                     ),
+                    // Blood type badge
                     if (bloodType != 'Unknown')
                       Positioned(
                         bottom: 0,
@@ -392,6 +400,8 @@ class _ProfileSliverAppBar extends StatelessWidget {
     );
   }
 }
+
+// ── Section Header with Action ────────────────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
   final String title;
@@ -444,6 +454,8 @@ class _SectionHeader extends StatelessWidget {
     );
   }
 }
+
+// ── Section Card ──────────────────────────────────────────────────────────────
 
 class _ProfileSectionCard extends StatelessWidget {
   final String title;
@@ -508,6 +520,8 @@ class _ProfileSectionCard extends StatelessWidget {
   }
 }
 
+// ── Identity Fields ───────────────────────────────────────────────────────────
+
 class _IdentityFields extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController phoneController;
@@ -540,6 +554,8 @@ class _IdentityFields extends StatelessWidget {
   }
 }
 
+// ── Medical Info Fields ───────────────────────────────────────────────────────
+
 class _MedicalInfoFields extends StatelessWidget {
   final TextEditingController medicalController;
   final String selectedBloodType;
@@ -557,6 +573,7 @@ class _MedicalInfoFields extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // Blood type row
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -593,7 +610,9 @@ class _MedicalInfoFields extends StatelessWidget {
                       style: const TextStyle(fontSize: 14, color: Color(0xFF212121)),
                       icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _teal),
                       dropdownColor: Colors.white,
-                      items: bloodTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                      items: bloodTypes
+                          .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                          .toList(),
                       onChanged: onBloodTypeChanged,
                     ),
                   ),
@@ -614,6 +633,8 @@ class _MedicalInfoFields extends StatelessWidget {
     );
   }
 }
+
+// ── Emergency Settings Row ────────────────────────────────────────────────────
 
 class _EmergencySettingsRow extends StatelessWidget {
   final bool value;
@@ -664,6 +685,8 @@ class _EmergencySettingsRow extends StatelessWidget {
   }
 }
 
+// ── Emergency Contact List ────────────────────────────────────────────────────
+
 class _EmergencyContactList extends StatelessWidget {
   final List<EmergencyContact> contacts;
   final void Function(EmergencyContact, bool?) onToggle;
@@ -678,14 +701,16 @@ class _EmergencyContactList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (contacts.isEmpty) {
-      return const _EmptyState(
+      return _EmptyState(
         icon: Icons.contact_phone_rounded,
         message: 'No emergency contacts added yet.',
       );
     }
 
     return Column(
-      children: contacts.map((c) => _ContactCard(contact: c, onToggle: onToggle, onRemove: onRemove)).toList(),
+      children: contacts
+          .map((c) => _ContactCard(contact: c, onToggle: onToggle, onRemove: onRemove))
+          .toList(),
     );
   }
 }
@@ -717,12 +742,14 @@ class _ContactCard extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // Checkbox
           Checkbox(
             value: contact.isSelected,
             onChanged: (v) => onToggle(contact, v),
             activeColor: _teal,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           ),
+          // Avatar
           Container(
             width: 36,
             height: 36,
@@ -742,6 +769,7 @@ class _ContactCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
+          // Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -757,6 +785,7 @@ class _ContactCard extends StatelessWidget {
               ],
             ),
           ),
+          // Delete
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFBDBDBD), size: 20),
             onPressed: () => onRemove(contact),
@@ -767,6 +796,8 @@ class _ContactCard extends StatelessWidget {
   }
 }
 
+// ── Offline Regions List ──────────────────────────────────────────────────────
+
 class _OfflineRegionsList extends StatelessWidget {
   final List<Map<String, dynamic>> locations;
   final void Function(Map<String, dynamic>) onDelete;
@@ -776,14 +807,16 @@ class _OfflineRegionsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (locations.isEmpty) {
-      return const _EmptyState(
+      return _EmptyState(
         icon: Icons.offline_pin_rounded,
         message: 'No offline regions saved. Add a trip if you are heading to a low-network area.',
       );
     }
 
     return Column(
-      children: locations.map((loc) => _OfflineRegionCard(location: loc, onDelete: onDelete)).toList(),
+      children: locations
+          .map((loc) => _OfflineRegionCard(location: loc, onDelete: onDelete))
+          .toList(),
     );
   }
 }
@@ -846,6 +879,8 @@ class _OfflineRegionCard extends StatelessWidget {
     );
   }
 }
+
+// ── Profile Field ─────────────────────────────────────────────────────────────
 
 class _ProfileField extends StatelessWidget {
   final TextEditingController controller;
@@ -913,6 +948,8 @@ class _ProfileField extends StatelessWidget {
   }
 }
 
+// ── Empty State ───────────────────────────────────────────────────────────────
+
 class _EmptyState extends StatelessWidget {
   final IconData icon;
   final String message;
@@ -944,7 +981,7 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ── Contact Search Dialog ───────────────────────────────────────────────────
+// ── Contact Search Dialog (UNCHANGED) ────────────────────────────────────────
 
 class ContactSearchDialog extends StatefulWidget {
   final List<EmergencyContact> contacts;
@@ -969,18 +1006,12 @@ class _ContactSearchDialogState extends State<ContactSearchDialog> {
     return Column(
       children: [
         const SizedBox(height: 12),
-        Container(
-            width: 36,
-            height: 4,
-            decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(2))),
+        Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(2))),
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Container(
-            decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0))),
+            decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
             child: TextField(
               decoration: InputDecoration(
                 hintText: 'Search contacts...',
@@ -990,8 +1021,7 @@ class _ContactSearchDialogState extends State<ContactSearchDialog> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
               ),
               onChanged: (v) => setState(() {
-                _filtered =
-                    widget.contacts.where((c) => c.name.toLowerCase().contains(v.toLowerCase())).toList();
+                _filtered = widget.contacts.where((c) => c.name.toLowerCase().contains(v.toLowerCase())).toList();
               }),
             ),
           ),
@@ -1003,8 +1033,7 @@ class _ContactSearchDialogState extends State<ContactSearchDialog> {
             itemBuilder: (context, i) => ListTile(
               leading: CircleAvatar(
                 backgroundColor: const Color(0xFFEFF6F5),
-                child: Text(_filtered[i].name.isNotEmpty ? _filtered[i].name[0] : '?',
-                    style: const TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.w700)),
+                child: Text(_filtered[i].name.isNotEmpty ? _filtered[i].name[0] : '?', style: const TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.w700)),
               ),
               title: Text(_filtered[i].name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
               subtitle: Text(_filtered[i].phone, style: TextStyle(fontSize: 12, color: Colors.grey[500])),

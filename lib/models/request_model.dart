@@ -24,7 +24,7 @@ class EmergencyRequest {
   final double radius;
   final DateTime? completedAt;   // ✅ Nullable
   final DateTime? expiredAt;     // ✅ Nullable
-
+  final bool? isReviewed;
   EmergencyRequest({
     required this.id,
     required this.itemName,
@@ -47,7 +47,7 @@ class EmergencyRequest {
     this.verificationCode,
     this.radius = 5.0,
     this.completedAt,
-    this.expiredAt,
+    this.expiredAt, this.isReviewed,
   });
 
   factory EmergencyRequest.fromFirestore(DocumentSnapshot doc) {
