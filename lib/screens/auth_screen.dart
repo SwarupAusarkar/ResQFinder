@@ -170,8 +170,6 @@ class _AuthScreenState extends State<AuthScreen> {
         // Optional Provider Fields
         hfrId: isProvider ? _hfrController.text.trim() : null,
         nmcId: isProvider ? _nmcController.text.trim() : null,
-        isHFRVerified: isProvider ? false : null,
-        isNMCVerified: isProvider ? false : null,
 
         // Placeholders for now
         address: '',
