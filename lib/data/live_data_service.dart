@@ -2,9 +2,9 @@
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import '../models/provider_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/provider_model.dart';
+import '../models/inventory_item_model.dart';
 
 class LiveDataService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -17,11 +17,11 @@ class LiveDataService {
     required double longitude,
   }) async {
     try {
-      // FIX: Changed 'users' to 'providers'
       final query = _firestore
-          .collection('providers') 
+          .collection('providers')
           .where('profileComplete', isEqualTo: true)
-          .where('verificationStatus', isEqualTo: 'approved') // Only get verified ones!
+      // Note: This works if inventory is a list of strings.
+      // If inventory is a list of objects, Firestore has limitations here.
           .where('inventory.name', arrayContains: service);
 
       final querySnapshot = await query.get();
@@ -35,7 +35,7 @@ class LiveDataService {
     }
   }
 
-  /// Fetch providers (hospital, police, ambulance) near given coordinates
+  /// Fetch providers from BOTH Firestore AND OpenStreetMap
   static Future<List<Provider>> fetchProviders({
     required String serviceType,
     double latitude = 19.0760,
@@ -44,7 +44,8 @@ class LiveDataService {
   }) async {
     List<Provider> allProviders = [];
 
-      // FIX: Changed 'users' to 'providers'
+    // 1. Fetch from Firestore (registered providers)
+    try {
       final firestoreProviders = await _firestore
           .collection('providers')
           .where('type', isEqualTo: serviceType)
@@ -55,15 +56,25 @@ class LiveDataService {
       allProviders.addAll(firestoreProviders.docs.map((doc) {
         return Provider.fromJson(doc.id, doc.data() as Map<String, dynamic>);
       }));
+    } catch (e) {
+      print('Error fetching Firestore providers: $e');
+    }
 
-    // 2. Fetch from OpenStreetMap (With Offline Fallback!)
+    // 2. Fetch from OpenStreetMap
     try {
       String osmKey = "";
       switch (serviceType.toLowerCase()) {
-        case "hospital": osmKey = 'amenity=hospital'; break;
-        case "police": osmKey = 'amenity=police'; break;
-        case "ambulance": osmKey = 'amenity=clinic'; break;
-        default: osmKey = 'amenity=hospital';
+        case "hospital":
+          osmKey = 'amenity=hospital';
+          break;
+        case "police":
+          osmKey = 'amenity=police';
+          break;
+        case "ambulance":
+          osmKey = 'amenity=clinic'; // OSM often tags ambulance stations as clinics/hospitals
+          break;
+        default:
+          osmKey = 'amenity=hospital';
       }
 
       final query = """
@@ -72,7 +83,6 @@ class LiveDataService {
         out body;
       """;
 
-      // Try fetching live from the internet
       final response = await http.post(
         Uri.parse(_overpassUrl),
         body: {"data": query},
@@ -82,69 +92,32 @@ class LiveDataService {
         final data = json.decode(response.body);
         final elements = data["elements"] as List<dynamic>;
 
-        allProviders.addAll(
-          elements.map((e) {
-            return Provider(
-              id: "osm_${e["id"]}",
-              name: e["tags"]?["name"] ?? "Unknown ${serviceType.capitalize()}",
-              type: serviceType,
-              phone: e["tags"]?["phone"] ?? "N/A",
-              address: e["tags"]?["addr:full"] ?? "${e["lat"]}, ${e["lon"]}",
-              latitude: e["lat"]?.toDouble() ?? latitude,
-              longitude: e["lon"]?.toDouble() ?? longitude,
-              distance: 0.0,
-              isAvailable: true,
-              rating: 4,
-              description: "Live $serviceType from OpenStreetMap",
-              inventory: [],
-              noOfApprovedRequests: 0,
-              verificationType: '',
-              fcmToken: '',
-               // OSM data won't have inventory
-            );
-          }),
-        );
-
-        allProviders.addAll(elements.map((e) {
+        // Cleaned up: Single mapping to avoid triple-duplicates
+        final osmProviders = elements.map((e) {
+          final tags = e["tags"] ?? {};
           return Provider(
             id: "osm_${e["id"]}",
-            name: e["tags"]?["name"] ?? "Unknown ${serviceType.capitalize()}",
+            name: tags["name"] ?? "Unknown ${serviceType.capitalize()}",
             type: serviceType,
-            phone: e["tags"]?["phone"] ?? "N/A",
-            address: e["tags"]?["addr:full"] ?? "${e["lat"]}, ${e["lon"]}",
+            phone: tags["phone"] ?? tags["contact:phone"] ?? "N/A",
+            address: tags["addr:full"] ?? tags["addr:street"] ?? "${e["lat"]}, ${e["lon"]}",
             latitude: e["lat"]?.toDouble() ?? latitude,
             longitude: e["lon"]?.toDouble() ?? longitude,
             distance: 0.0,
             isAvailable: true,
-            rating: 4,
-            description: "Live $serviceType from OpenStreetMap",
-            inventory: [], 
+            rating: 4.0,
+            description: "Public $serviceType data from OpenStreetMap",
+            inventory: [], // OSM data won't have your app's specific inventory items
             noOfApprovedRequests: 0,
-            verificationType: '',
+            verificationType: tags["verificationType"] ?? 'osm_verified',
             fcmToken: '',
           );
-        }));
+        }).toList();
 
+        allProviders.addAll(osmProviders);
       }
     } catch (e) {
-      // OFFLINE FALLBACK: If HTTP post fails (no internet), load from SharedPreferences
-      print('No internet for OSM. Loading cached OSM providers...');
-      
-      final prefs = await SharedPreferences.getInstance();
-      final keys = prefs.getKeys().where((k) => k.startsWith('offline_api_'));
-      
-      for (String key in keys) {
-        final String? cachedData = prefs.getString(key);
-        if (cachedData != null) {
-          final List<dynamic> decodedList = jsonDecode(cachedData);
-          for (var item in decodedList) {
-            // Only add if it matches the requested serviceType
-            if (item['type'] == serviceType) {
-               allProviders.add(Provider.fromJson(item['id'], item as Map<String, dynamic>));
-            }
-          }
-        }
-      }
+      print('Error fetching OSM providers: $e');
     }
 
     return allProviders;
@@ -154,6 +127,6 @@ class LiveDataService {
 extension StringCapitalize on String {
   String capitalize() {
     if (isEmpty) return this;
-    return "${this[0].toUpperCase()}${substring(1)}";
+    return "${this[0].toUpperCase()}${this.substring(1)}";
   }
 }

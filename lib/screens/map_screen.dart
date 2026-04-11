@@ -21,7 +21,7 @@ class _MapScreenState extends State<MapScreen> {
   LatLng? _currentPosition;
   bool _isLoading = true;
 
-  // Search & filter state
+  // Search & Filter State
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   bool _showSearchBar = false;
@@ -34,12 +34,14 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    // Initialize map after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) => _initializeMap());
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -60,58 +62,84 @@ class _MapScreenState extends State<MapScreen> {
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     if (args != null) {
       _providers = args['providers'] as List<Provider>? ?? [];
-      _serviceType = args['serviceType'] as String? ?? 'all';
+      _serviceType = args['serviceType'] as String? ?? 'Service';
       _filteredProviders = List.from(_providers);
+      _applyFilters(); // Apply default sorting immediately
     }
   }
 
   void _applyFilters() {
     List<Provider> result = List.from(_providers);
+
+    // 1. Search Query Filter
     if (_searchQuery.isNotEmpty) {
       result = result.where((p) =>
       p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           p.address.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
     }
-    if (_showAvailableOnly) result = result.where((p) => p.isAvailable).toList();
 
+    // 2. Availability Filter
+    if (_showAvailableOnly) {
+      result = result.where((p) => p.isAvailable).toList();
+    }
+
+    // 3. Sorting Logic
     if (_sortBy == 'rating') {
       result.sort((a, b) => b.rating.compareTo(a.rating));
     } else {
       result.sort((a, b) => a.distance.compareTo(b.distance));
     }
+
     setState(() => _filteredProviders = result);
   }
 
   Future<void> _determinePosition() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) { _showErrorDialog('Location services are disabled.'); return; }
+
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) { _showErrorDialog('Location permissions are denied.'); return; }
     }
-    if (permission == LocationPermission.deniedForever) { _showErrorDialog('Location permissions are permanently denied.'); return; }
+
+    if (permission == LocationPermission.deniedForever) {
+      _showErrorDialog('Location permissions are permanently denied.');
+      return;
+    }
+
     try {
       final position = await Geolocator.getCurrentPosition();
-      if (mounted) setState(() => _currentPosition = LatLng(position.latitude, position.longitude));
-    } catch (e) { _showErrorDialog('Failed to get location: $e'); }
+      if (mounted) {
+        setState(() => _currentPosition = LatLng(position.latitude, position.longitude));
+        _mapController.move(_currentPosition!, 14.0);
+      }
+    } catch (e) {
+      _showErrorDialog('Failed to get location: $e');
+    }
   }
 
   void _showErrorDialog(String message) {
     if (!mounted) return;
-    showDialog(context: context, builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text('Location Error', style: TextStyle(fontWeight: FontWeight.w700)),
-      content: Text(message),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
-    ));
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Location Error', style: TextStyle(fontWeight: FontWeight.w700)),
+        content: Text(message),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+      ),
+    );
   }
 
   void _centerOnUserLocation() {
     if (_currentPosition != null) {
       _mapController.move(_currentPosition!, 15.0);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User location not available yet.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Detecting your location...'))
+      );
+      _determinePosition();
     }
   }
 
@@ -141,45 +169,46 @@ class _MapScreenState extends State<MapScreen> {
       backgroundColor: const Color(0xFFF5F0E8),
       body: Stack(
         children: [
-          // The Map Layer
           _isLoading
               ? const Center(child: CircularProgressIndicator(color: _teal))
-              : FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _currentPosition ?? const LatLng(19.0760, 72.8777),
-              initialZoom: 13.0,
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-                subdomains: const ['a', 'b', 'c', 'd'],
-                userAgentPackageName: "com.cityissues.app",
-              ),
-              MarkerLayer(markers: _buildMarkers()),
-            ],
-          ),
-
-          // UI Overlays
+              : _buildMap(),
           _MapTopOverlay(
             serviceType: _serviceType,
             showSearchBar: _showSearchBar,
             searchController: _searchController,
             onSearchToggle: () => setState(() {
               _showSearchBar = !_showSearchBar;
-              if (!_showSearchBar) { _searchController.clear(); _applyFilters(); }
+              if (!_showSearchBar) {
+                _searchController.clear();
+                _applyFilters();
+              }
             }),
             onFilterTap: _showFilterSheet,
             filterCount: filterCount,
           ),
-
           Positioned(bottom: 24, right: 20, child: _SosButton()),
           Positioned(bottom: 90, right: 20, child: _CenterButton(onTap: _centerOnUserLocation)),
-
           if (!_isLoading)
             Positioned(bottom: 90, left: 20, child: _ResultsBubble(count: _filteredProviders.length)),
         ],
       ),
+    );
+  }
+
+  Widget _buildMap() {
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: _currentPosition ?? const LatLng(19.0760, 72.8777),
+        initialZoom: 13.0,
+      ),
+      children: [
+        TileLayer(
+            urlTemplate: "https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
+            userAgentPackageName: "com.cityissues.app"
+        ),
+        MarkerLayer(markers: _buildMarkers()),
+      ],
     );
   }
 
@@ -226,7 +255,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 }
 
-// ── Search/filter overlay components ──────────────────────────────────────────
+// ── UI Components (Overlays & Widgets) ──────────────────────────────────────────
 
 class _MapTopOverlay extends StatelessWidget {
   final String serviceType;
@@ -254,11 +283,16 @@ class _MapTopOverlay extends StatelessWidget {
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 200),
-                  child: showSearchBar ? _SearchField(controller: searchController) : _SearchLabel(serviceType: serviceType),
+                  child: showSearchBar
+                      ? _SearchField(controller: searchController)
+                      : _SearchLabel(serviceType: serviceType),
                 ),
               ),
               const SizedBox(width: 8),
-              _TopBarButton(icon: showSearchBar ? Icons.close_rounded : Icons.search_rounded, onTap: onSearchToggle),
+              _TopBarButton(
+                  icon: showSearchBar ? Icons.close_rounded : Icons.search_rounded,
+                  onTap: onSearchToggle
+              ),
               const SizedBox(width: 8),
               Stack(
                 clipBehavior: Clip.none,
@@ -268,9 +302,9 @@ class _MapTopOverlay extends StatelessWidget {
                     Positioned(
                       top: -4, right: -4,
                       child: Container(
-                        width: 16, height: 16,
+                        width: 18, height: 18,
                         decoration: const BoxDecoration(color: Color(0xFF0D9488), shape: BoxShape.circle),
-                        child: Center(child: Text('$filterCount', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))),
+                        child: Center(child: Text('$filterCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))),
                       ),
                     ),
                 ],
@@ -294,9 +328,9 @@ class _SearchLabel extends StatelessWidget {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 12, offset: const Offset(0, 3))]),
       child: Row(children: [
         const SizedBox(width: 14),
-        Icon(Icons.search_rounded, size: 18, color: Colors.grey[400]),
+        Icon(Icons.location_on_rounded, size: 18, color: Colors.teal[400]),
         const SizedBox(width: 8),
-        Expanded(child: Text('Search ${serviceType.capitalize()} near me...', style: TextStyle(color: Colors.grey[400], fontSize: 13), overflow: TextOverflow.ellipsis)),
+        Expanded(child: Text('Finding ${serviceType.capitalize()}s...', style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
       ]),
     );
   }
@@ -315,9 +349,9 @@ class _SearchField extends StatelessWidget {
         controller: controller, autofocus: true,
         style: const TextStyle(fontSize: 14, color: Color(0xFF0D4F4A)),
         decoration: InputDecoration(
-          hintText: 'Type hospital, clinic name...', hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+          hintText: 'Search by name or street...', hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
           prefixIcon: Icon(Icons.search_rounded, color: Colors.grey[400], size: 18),
-          border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(vertical: 13),
+          border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(vertical: 12),
         ),
       ),
     );
@@ -349,14 +383,14 @@ class _ResultsBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(color: const Color(0xFF0D4F4A), borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10)]),
-      child: Text('$count result${count == 1 ? '' : 's'}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+      child: Text('$count ${count == 1 ? 'Provider' : 'Providers'} Found', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
     );
   }
 }
 
-// ── Filter bottom sheet ───────────────────────────────────────────────────────
+// ── Filter Bottom Sheet ───────────────────────────────────────────────────────
 
 class _FilterBottomSheet extends StatefulWidget {
   final bool showAvailableOnly;
@@ -373,7 +407,11 @@ class _FilterBottomSheetState extends State<_FilterBottomSheet> {
   late String _sort;
 
   @override
-  void initState() { super.initState(); _available = widget.showAvailableOnly; _sort = widget.sortBy; }
+  void initState() {
+    super.initState();
+    _available = widget.showAvailableOnly;
+    _sort = widget.sortBy;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -395,7 +433,7 @@ class _FilterBottomSheetState extends State<_FilterBottomSheet> {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
               child: Row(children: [
-                const Expanded(child: Text('Available providers only', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF0D4F4A)))),
+                const Expanded(child: Text('Show Available Only', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF0D4F4A)))),
                 Switch(value: _available, onChanged: (v) => setState(() => _available = v), activeColor: const Color(0xFF0D9488)),
               ]),
             ),
@@ -409,11 +447,14 @@ class _FilterBottomSheetState extends State<_FilterBottomSheet> {
             ]),
             const SizedBox(height: 24),
             SizedBox(
-              width: double.infinity, height: 48,
+              width: double.infinity, height: 52,
               child: ElevatedButton(
-                onPressed: () { Navigator.pop(context); widget.onApply(_available, _sort); },
+                onPressed: () {
+                  Navigator.pop(context);
+                  widget.onApply(_available, _sort);
+                },
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D9488), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
-                child: const Text('Apply Filters', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                child: const Text('Apply Selection', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               ),
             ),
           ],
@@ -434,10 +475,10 @@ class _SortChip extends StatelessWidget {
     return GestureDetector(
       onTap: () => onTap(value),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF0D9488) : Colors.white,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: isSelected ? const Color(0xFF0D9488) : const Color(0xFFE2E8F0)),
         ),
         child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : const Color(0xFF0D4F4A))),
@@ -446,7 +487,7 @@ class _SortChip extends StatelessWidget {
   }
 }
 
-// ── Map pin & provider sheet ──────────────────────────────────────────────────
+// ── Custom Map Pins ───────────────────────────────────────────────────────────
 
 class _ProviderMapPin extends StatelessWidget {
   final Provider provider;
@@ -468,11 +509,17 @@ class _ProviderMapPin extends StatelessWidget {
       alignment: Alignment.center,
       children: [
         Container(
-          width: 40, height: 40,
-          decoration: BoxDecoration(color: _pinColor, borderRadius: BorderRadius.circular(10), boxShadow: [BoxShadow(color: _pinColor.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 3))]),
-          child: Center(child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 20)),
+          width: 42, height: 42,
+          decoration: BoxDecoration(color: _pinColor, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: _pinColor.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 3))]),
+          child: Center(
+              child: Icon(
+                  provider.type.toLowerCase() == 'police' ? Icons.shield_rounded : Icons.local_hospital_rounded,
+                  color: Colors.white,
+                  size: 20
+              )
+          ),
         ),
-        Positioned(bottom: 0, child: CustomPaint(painter: _PinNubPainter(color: _pinColor), size: const Size(10, 6))),
+        Positioned(bottom: 0, child: CustomPaint(painter: _PinNubPainter(color: _pinColor), size: const Size(12, 8))),
       ],
     );
   }
@@ -481,14 +528,12 @@ class _ProviderMapPin extends StatelessWidget {
 class _PinNubPainter extends CustomPainter {
   final Color color;
   const _PinNubPainter({required this.color});
-
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
     final ui.Path path = ui.Path()..moveTo(0, 0)..lineTo(size.width / 2, size.height)..lineTo(size.width, 0)..close();
     canvas.drawPath(path, paint);
   }
-
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -497,7 +542,12 @@ class _UserLocationPin extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF3B82F6), border: Border.all(color: Colors.white, width: 3), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 6)]),
+      decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: const Color(0xFF3B82F6),
+          border: Border.all(color: Colors.white, width: 3),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 6)]
+      ),
     );
   }
 }
@@ -510,9 +560,6 @@ class _ProviderBottomSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isAvailable = provider.isAvailable;
-    final statusColor = isAvailable ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
-    final statusBg = isAvailable ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2);
-
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 20, offset: const Offset(0, -4))]),
@@ -523,24 +570,44 @@ class _ProviderBottomSheet extends StatelessWidget {
           children: [
             Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 16), decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(2))),
             Row(children: [
-              ClipRRect(borderRadius: BorderRadius.circular(12), child: Container(width: 64, height: 64, color: const Color(0xFFF0FDF9), child: Center(child: Text(provider.iconPath, style: const TextStyle(fontSize: 30))))),
+              Container(
+                  width: 64, height: 64,
+                  decoration: BoxDecoration(color: const Color(0xFFF0FDF9), borderRadius: BorderRadius.circular(16)),
+                  child: const Center(child: Icon(Icons.business_rounded, color: Color(0xFF0D9488), size: 30))
+              ),
               const SizedBox(width: 14),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(child: Text(provider.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)))),
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(20)), child: Text(isAvailable ? 'AVAILABLE' : 'LIMITED', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: statusColor))),
-                ]),
+                Text(provider.name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
                 const SizedBox(height: 4),
                 Text(provider.address, style: TextStyle(fontSize: 12, color: Colors.grey[500]), maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 4),
-                Text('${provider.distance.toStringAsFixed(1)} km away', style: const TextStyle(fontSize: 12, color: Color(0xFF0D9488), fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Row(children: [
+                  const Icon(Icons.star_rounded, color: Colors.amber, size: 14),
+                  const SizedBox(width: 4),
+                  Text('${provider.rating}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 12),
+                  Text('${provider.distance.toStringAsFixed(1)} km away', style: const TextStyle(fontSize: 12, color: Color(0xFF0D9488), fontWeight: FontWeight.w600)),
+                ]),
               ])),
             ]),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Row(children: [
-              Expanded(child: SizedBox(height: 44, child: ElevatedButton.icon(onPressed: onViewDetails, icon: const Icon(Icons.info_outline_rounded, size: 16), label: const Text('Book Now', style: TextStyle(fontWeight: FontWeight.w700)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D9488), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0)))),
-              const SizedBox(width: 10),
-              Container(width: 44, height: 44, decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF16A34A).withOpacity(0.3))), child: const Icon(Icons.near_me_rounded, color: Color(0xFF16A34A), size: 20)),
+              Expanded(
+                  child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton(
+                          onPressed: onViewDetails,
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D9488), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                          child: const Text('View Full Details', style: TextStyle(fontWeight: FontWeight.w700))
+                      )
+                  )
+              ),
+              const SizedBox(width: 12),
+              Container(
+                  width: 48, height: 48,
+                  decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.directions_rounded, color: Color(0xFF16A34A), size: 24)
+              ),
             ]),
           ],
         ),
@@ -553,9 +620,9 @@ class _SosButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 56, height: 56,
+      width: 60, height: 60,
       decoration: BoxDecoration(color: const Color(0xFFDC2626), shape: BoxShape.circle, boxShadow: [BoxShadow(color: const Color(0xFFDC2626).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 4))]),
-      child: const Center(child: Text('SOS', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5))),
+      child: const Center(child: Text('SOS', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 0.5))),
     );
   }
 }
@@ -563,7 +630,6 @@ class _SosButton extends StatelessWidget {
 class _CenterButton extends StatelessWidget {
   final VoidCallback onTap;
   const _CenterButton({required this.onTap});
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
