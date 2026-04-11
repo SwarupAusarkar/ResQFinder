@@ -2,8 +2,9 @@
 
 import 'package:emergency_res_loc_new/screens/send_request_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart'; // NEW IMPORT
+import 'package:url_launcher/url_launcher.dart';
 import '../models/provider_model.dart';
+import '../models/inventory_item_model.dart';
 import '../services/navigation_service.dart';
 
 // Detailed view of a specific provider
@@ -28,302 +29,202 @@ class ProviderDetailsScreen extends StatelessWidget {
     }
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F9F8),
       appBar: AppBar(
-        title: Text(provider.name),
-        backgroundColor: _getServiceColor(provider.type),
-        foregroundColor: Colors.white,
+        title: Text(
+          provider.name.split(' ').first,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF1A1A1A),
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share_outlined),
+            onPressed: () {},
+          ),
+          const CircleAvatar(
+            radius: 16,
+            backgroundColor: Color(0xFFE8F5E9),
+            child: Icon(Icons.person, size: 20, color: Color(0xFF4CAF50)),
+          ),
+          const SizedBox(width: 16),
+        ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 160), 
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header card with main info
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Provider header
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color:
-                                _getServiceColor(provider.type).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            provider.iconPath,
-                            style: const TextStyle(fontSize: 32),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                provider.name,
-                                style: const TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                provider.type.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: _getServiceColor(provider.type),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: provider.isAvailable
-                                      ? Colors.green
-                                      : Colors.red,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  provider.isAvailable
-                                      ? 'Available Now'
-                                      : 'Currently Busy',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
+            // Provider Header with gradient
+            _buildProviderHeader(provider),
 
-                    // Quick stats
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            'Distance',
-                            '${provider.distance.toStringAsFixed(1)} km',
-                            Icons.near_me,
-                            Colors.blue,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildStatCard(
-                            'Rating',
-                            '${provider.rating}/5',
-                            Icons.star,
-                            Colors.orange,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+            // Stats Row
+            _buildStatsRow(provider),
+
+            const SizedBox(height: 16),
+
+            // Live Inventory Section
+            _buildLiveInventorySection(provider, context),
+
+            const SizedBox(height: 16),
+
+            // About Provider Section
+            _buildAboutProviderSection(provider),
+
+            const SizedBox(height: 16),
+
+            // Contact Info Section
+            _buildContactInfoSection(provider, context),
+
+            const SizedBox(height: 100),
+          ],
+        ),
+      ),
+      bottomNavigationBar: _buildActionButtons(provider, context),
+    );
+  }
+
+  // Provider Header with gradient background
+  Widget _buildProviderHeader(Provider provider) {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFE8F5F3), Color(0xFFF5F9F8)],
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+        child: Column(
+          children: [
+            // Icon Container
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  provider.iconPath,
+                  style: const TextStyle(fontSize: 48),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
-            // Contact Information Card
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.contact_phone,
-                          color: _getServiceColor(provider.type),
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Contact Information',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+            // Provider Name with verified badge
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    provider.name,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A1A1A),
                     ),
-                    const SizedBox(height: 16),
-                    _buildDetailRow(
-                      Icons.phone,
-                      'Phone',
-                      provider.phone,
-                      // NEW: Calls the native dialer
-                      onTap: () => _makePhoneCall(provider.phone, context),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildDetailRow(
-                      Icons.location_on,
-                      'Address',
-                      provider.address,
-                      onTap: () => NavigationService.openMap(
-                          provider.latitude, provider.longitude, provider.name, context),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Description Card (if available)
-            if (provider.description.isNotEmpty) ...[
-              Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            color: _getServiceColor(provider.type),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'About This Provider',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        provider.description,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
+                    textAlign: TextAlign.center,
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-            ],
+                const SizedBox(width: 6),
+                const Icon(Icons.verified, color: Color(0xFF2196F3), size: 20),
+              ],
+            ),
+            const SizedBox(height: 8),
 
-            // Real-time Inventory Card
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+            // Address
+            Text(
+              provider.address,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF757575),
+                fontWeight: FontWeight.w400,
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.inventory_2,
-                          color: _getServiceColor(provider.type),
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Live Inventory',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+
+            // Availability Badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: provider.isAvailable
+                    ? const Color(0xFFE8F5E9)
+                    : const Color(0xFFFFEBEE),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: provider.isAvailable
+                          ? const Color(0xFF4CAF50)
+                          : const Color(0xFFF44336),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(height: 16),
-                    if (provider.inventory.isEmpty)
-                      const Text('No inventory data available.', style: TextStyle(color: Colors.grey))
-                    else
-                      ...provider.inventory.map((item) {
-                        return InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => SendRequestScreen(
-                                  // provider: provider,
-                                  inventoryItem: item,
-                                ),
-                              ),
-                            );
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(child: Text(item.name, style: const TextStyle(fontSize: 15))),
-                                Text('${item.quantity} ${item.unit}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                                const SizedBox(width: 16),
-                                const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    provider.isAvailable ? 'AVAILABLE NOW' : 'CURRENTLY BUSY',
+                    style: TextStyle(
+                      color: provider.isAvailable
+                          ? const Color(0xFF2E7D32)
+                          : const Color(0xFFC62828),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
       ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
+    );
+  }
+
+  // Stats Row (Distance & Rating)
+  Widget _buildStatsRow(Provider provider) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
         children: [
-          FloatingActionButton.extended(
-            heroTag: "directions",
-            onPressed: () => NavigationService.openMap(
-                provider.latitude, provider.longitude, provider.name, context),
-            backgroundColor: Colors.blue,
-            icon: const Icon(Icons.directions, color: Colors.white),
-            label: const Text(
-              'Get Directions',
-              style: TextStyle(color: Colors.white),
+          Expanded(
+            child: _buildStatCard(
+              Icons.navigation,
+              const Color(0xFF2196F3),
+              const Color(0xFFE3F2FD),
+              'Distance',
+              '${provider.distance.toStringAsFixed(1)} km',
             ),
           ),
-          const SizedBox(height: 16),
-          FloatingActionButton.extended(
-            heroTag: "call",
-            // NEW: Calls the native dialer
-            onPressed: () => _makePhoneCall(provider.phone, context),
-            backgroundColor: Colors.green,
-            icon: const Icon(Icons.phone, color: Colors.white),
-            label: const Text(
-              'Call Now',
-              style: TextStyle(color: Colors.white),
+          const SizedBox(width: 16),
+          Expanded(
+            child: _buildStatCard(
+              Icons.star,
+              const Color(0xFFFFC107),
+              const Color(0xFFFFF9C4),
+              'Rating',
+              '${provider.rating} (2.1k)',
             ),
           ),
         ],
@@ -331,111 +232,534 @@ class ProviderDetailsScreen extends StatelessWidget {
     );
   }
 
-  // Build stat card widget
-  Widget _buildStatCard(
-      String title, String value, IconData icon, Color color) {
+  Widget _buildStatCard(IconData icon, Color iconColor, Color backgroundColor,
+      String label, String value) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: iconColor, size: 24),
+          ),
+          const SizedBox(height: 12),
           Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: color,
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF757575),
             ),
           ),
+          const SizedBox(height: 4),
           Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
+            value,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1A1A1A),
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
 
-  // Build detail row widget
-  Widget _buildDetailRow(
-    IconData icon,
-    String label,
-    String value, {
-    VoidCallback? onTap,
-  }) {
+  // Live Inventory Section
+  Widget _buildLiveInventorySection(Provider provider, BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Live Inventory',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFEBEE),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF44336),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'LIVE',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFC62828),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Last updated 2 mins ago',
+            style: TextStyle(
+              fontSize: 12,
+              color: Color(0xFF9E9E9E),
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Inventory Items Grid
+          if (provider.inventory.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                'No inventory data available.',
+                style: TextStyle(color: Color(0xFF9E9E9E), fontSize: 14),
+              ),
+            )
+          else
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1, 
+              children: provider.inventory.map((item) {
+                return _buildInventoryCard(item, context);
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInventoryCard(InventoryItem item, BuildContext context) {
+    Color getIndicatorColor() {
+      if (item.quantity == 0) return const Color(0xFFF44336);
+      if (item.quantity <= 5) return const Color(0xFFFF9800);
+      return const Color(0xFF4CAF50);
+    }
+
+    IconData getItemIcon() {
+      final name = item.name.toLowerCase();
+      if (name.contains('blood')) return Icons.bloodtype;
+      if (name.contains('bed')) return Icons.bed;
+      if (name.contains('ventilator')) return Icons.air;
+      if (name.contains('oxygen') || name.contains('cylinder')) {
+        return Icons.local_hospital;
+      }
+      return Icons.inventory_2;
+    }
+
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SendRequestScreen(inventoryItem: item),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFAFAFA),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFEEEEEE)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    getItemIcon(),
+                    color: getIndicatorColor(),
+                    size: 24,
+                  ),
+                ),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: getIndicatorColor(),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF757575),
+                    letterSpacing: 0.3,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${item.quantity} ${item.unit}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // About Provider Section
+  Widget _buildAboutProviderSection(Provider provider) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'About Provider',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1A1A1A),
+            ),
+          ),
+          const SizedBox(height: 20),
+          _buildInfoRow(
+            Icons.local_hospital_outlined,
+            const Color(0xFF00BCD4),
+            const Color(0xFFE0F7FA),
+            'Specialties',
+            provider.description.isNotEmpty
+                ? provider.description
+                : 'Multi-specialty care including Cardiac, Trauma, and Neonatal intensive care units.',
+          ),
+          const SizedBox(height: 16),
+          _buildInfoRow(
+            Icons.security_outlined,
+            const Color(0xFF3F51B5),
+            const Color(0xFFE8EAF6),
+            'Accreditation',
+            'NABH accredited multi-specialty hospital in Navi Mumbai.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, Color iconColor, Color iconBgColor,
+      String title, String content) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: iconBgColor,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: iconColor, size: 20),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                content,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF757575),
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Contact Info Section
+  Widget _buildContactInfoSection(Provider provider, BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Contact Info',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1A1A1A),
+            ),
+          ),
+          const SizedBox(height: 20),
+          _buildContactRow(
+            Icons.location_on_outlined,
+            const Color(0xFF4CAF50),
+            const Color(0xFFE8F5E9),
+            'ADDRESS',
+            provider.address,
+            () => NavigationService.openMap(
+              provider.latitude,
+              provider.longitude,
+              provider.name,
+              context,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildContactRow(
+            Icons.phone_outlined,
+            const Color(0xFF2196F3),
+            const Color(0xFFE3F2FD),
+            'EMERGENCY LINE',
+            provider.phone,
+            () => _makePhoneCall(provider.phone, context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContactRow(IconData icon, Color iconColor, Color iconBgColor,
+      String label, String value, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.all(8),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFAFAFA),
+          borderRadius: BorderRadius.circular(12),
+        ),
         child: Row(
           children: [
-            Icon(
-              icon,
-              size: 20,
-              color: Colors.grey[600],
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: iconBgColor,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: iconColor, size: 20),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     label,
-                    style: TextStyle(
-                      fontSize: 12,
+                    style: const TextStyle(
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey[600],
+                      color: Color(0xFF9E9E9E),
+                      letterSpacing: 0.5,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text(
                     value,
                     style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A1A1A),
                     ),
                   ),
                 ],
               ),
             ),
-            if (onTap != null)
-              Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: Colors.grey[400],
-              ),
           ],
         ),
       ),
     );
   }
 
-  // Get service-specific color
-  Color _getServiceColor(String type) {
-    switch (type.toLowerCase()) {
-      case 'hospital':
-        return Colors.red;
-      case 'police':
-        return Colors.blue;
-      case 'ambulance':
-        return Colors.orange;
-      default:
-        return Colors.blue;
-    }
+  // Action Buttons (Bottom Navigation Bar)
+  Widget _buildActionButtons(Provider provider, BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => NavigationService.openMap(
+                  provider.latitude,
+                  provider.longitude,
+                  provider.name,
+                  context,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4C6FFF),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.directions_outlined, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Get Directions',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _makePhoneCall(provider.phone, context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00C853),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.phone, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Call Now',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
-  // NEW: Real Phone Call Logic
+  // Real Phone Call Logic
   Future<void> _makePhoneCall(String phoneNumber, BuildContext context) async {
     final Uri launchUri = Uri(
       scheme: 'tel',

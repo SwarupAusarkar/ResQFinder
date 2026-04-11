@@ -65,11 +65,11 @@ class ProviderCard extends StatelessWidget {
                   typeColor: _typeColor,
                   searchQuery: searchQuery,
                 ),
-              _ProviderCardFooter(
-                provider: provider,
-                typeColor: _typeColor,
-                onCallTap: () => _showPhoneDialog(context),
-              ),
+              // _ProviderCardFooter(
+              //   provider: provider,
+              //   typeColor: _typeColor,
+              //   onCallTap: () => _showPhoneDialog(context),
+              // ),
             ],
           ),
         ),

@@ -13,7 +13,6 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
   final AuthService _authService = AuthService();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Master list of services. In a real app, this might also come from Firestore.
   final List<String> _masterServiceList = [
     'Emergency Room', 'ICU Beds', 'Ventilators', 'X-Ray', 'CT Scan',
     'MRI', 'Blood Bank', 'Pharmacy', 'Surgery', 'Trauma Care',
@@ -25,57 +24,56 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
   final List<String> _selectedServices = [];
   bool _isLoading = false;
 
-      Future<void> _saveServices() async {
-      if (_isLoading) return;
-      
-      if (_selectedServices.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select at least one service!')),
-        );
-        return;
-      }
-      
-      setState(() => _isLoading = true);
+  Future<void> _saveServices() async {
+    if (_isLoading) return;
+    
+    if (_selectedServices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one service!')),
+      );
+      return;
+    }
+    
+    setState(() => _isLoading = true);
 
-      final user = _authService.currentUser;
-      if (user == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('You are not logged in!')),
-        );
-        setState(() => _isLoading = false);
-        return;
-      }
+    final user = _authService.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You are not logged in!')),
+      );
+      setState(() => _isLoading = false);
+      return;
+    }
 
-      try {
-        await _firestore.collection('users').doc(user.uid).update({
+    try {
+        await _firestore.collection('providers').doc(user.uid).update({
           'services': _selectedServices,
           'profileComplete': true,
         });
 
         if (mounted) {
+          // FIX: Push to the unified dashboard
           Navigator.of(context).pushReplacementNamed('/provider-dashboard');
         }
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to save services: $e')),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save services: $e')),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Setup Your Services'),
-        backgroundColor: Color(0xFF00897B),
+        backgroundColor: const Color(0xFF00897B),
         foregroundColor: Colors.white,
-        automaticallyImplyLeading: false, // No back button
+        automaticallyImplyLeading: false, 
       ),
       body: Column(
         children: [
@@ -100,6 +98,7 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
             child: ListView(
               children: _masterServiceList.map((service) {
                 return CheckboxListTile(
+                  activeColor: const Color(0xFF00897B),
                   title: Text(service),
                   value: _selectedServices.contains(service),
                   onChanged: (bool? value) {
@@ -120,13 +119,14 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
             child: ElevatedButton(
               onPressed: _saveServices,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF00897B),
+                backgroundColor: const Color(0xFF00897B),
                 foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 50),
+                minimumSize: const Size(double.infinity, 54),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               child: _isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('Finish Setup & Go to Dashboard'),
+                  ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Finish Setup', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
           ),
         ],

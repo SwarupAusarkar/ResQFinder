@@ -1,4 +1,3 @@
-
 import 'package:emergency_res_loc_new/models/inventory_item_model.dart';
 import 'package:emergency_res_loc_new/screens/InventoryManagementScreen.dart';
 import 'package:emergency_res_loc_new/screens/ProviderHistoryPage.dart';
@@ -29,6 +28,7 @@ import 'package:geolocator/geolocator.dart';
 import 'screens/send_request_screen.dart';
 import 'services/NotificationHelper.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'MainWrapper.dart'; // Import MainWrapper
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -82,6 +82,7 @@ void main() async {
   await androidPlugin?.createNotificationChannel(tier1Channel);
   await androidPlugin?.createNotificationChannel(tier2Channel);
   await androidPlugin?.createNotificationChannel(tier3Channel);
+  
   runApp(const EmergencyResourceLocatorApp());
 }
 
@@ -113,7 +114,6 @@ class _EmergencyResourceLocatorAppState
     _setupForegroundListener();
   }
 
-  /// 🔥 When app is opened from terminated state
   Future<void> _setupInteractedMessage() async {
     RemoteMessage? initialMessage =
         await FirebaseMessaging.instance.getInitialMessage();
@@ -122,13 +122,11 @@ class _EmergencyResourceLocatorAppState
       _handleMessage(initialMessage);
     }
 
-    /// When app opened from background
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
       _handleMessage(message);
     });
   }
 
-  /// 🔥 Foreground Notification Listener
   void _setupForegroundListener() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       print("📲 Foreground message: ${message.data}");
@@ -136,21 +134,17 @@ class _EmergencyResourceLocatorAppState
     });
   }
 
-  /// 🔥 Handle Routing Based On Data
   void _handleMessage(RemoteMessage message) {
     final type = message.data['type'];
     final requestId = message.data['requestId'];
 
-    if (type == "new_request") {
-      navigatorKey.currentState?.pushNamed('/provider-dashboard');
+    // Route to the MainWrapper instead of individual screens to preserve tabs
+    if (type == "new_request" || type == "offer_approved") {
+      navigatorKey.currentState?.pushNamed('/provider-home'); 
     }
 
     if (type == "offer_received") {
       navigatorKey.currentState?.pushNamed('/provider-list');
-    }
-
-    if (type == "offer_approved") {
-      navigatorKey.currentState?.pushNamed('/provider-dashboard');
     }
 
     if (type == "inventory_reminder") {
@@ -161,7 +155,7 @@ class _EmergencyResourceLocatorAppState
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: navigatorKey, // ✅ VERY IMPORTANT
+      navigatorKey: navigatorKey,
       title: 'Emergency Resource Locator',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -173,11 +167,14 @@ class _EmergencyResourceLocatorAppState
       ),
       initialRoute: '/',
       routes: {
+        // Core Routing
         '/': (context) => const AuthWrapper(),
+        '/provider-home': (context) => const MainWrapper(isProvider: true), 
+        '/requester-home': (context) => const MainWrapper(isProvider: false), 
+        
+        // Independent Screens
         '/home': (context) => const HomeScreen(),
         '/auth': (context) => const AuthScreen(),
-        '/provider-registration':
-            (context) => const ProviderRegistrationScreen(),
         '/service-selection': (context) => const ServiceSelectionScreen(),
         '/provider-list': (context) => const ProviderListScreen(),
         '/requester-history':(context)=> const RequesterHistoryScreen(),
@@ -190,8 +187,8 @@ class _EmergencyResourceLocatorAppState
         '/provider-details': (context) => const ProviderDetailsScreen(),
         '/map': (context) => const MapScreen(),
         '/citizen-registration': (context) => const CitizenRegisterScreen(),
-        '/provider-dashboard':
-            (context) => const ProviderDashboardScreen(initialTab: ''),
+        '/provider-home': (context) => const ProviderDashboardScreen(initialTab: 'new'),
+        '/provider-dashboard': (context) => const ProviderDashboardScreen(initialTab: 'new'),
         '/provider-registration':(context)=> const ProviderRegistrationScreen(),
         '/provider_map':(context)=> const ProviderMapScreen(),
         '/manage-services': (context) => const ManageServicesScreen(),

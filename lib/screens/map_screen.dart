@@ -71,24 +71,31 @@ class _MapScreenState extends State<MapScreen> {
   void _applyFilters() {
     List<Provider> result = List.from(_providers);
 
-    // 1. Search Query Filter
     if (_searchQuery.isNotEmpty) {
       result = result.where((p) =>
       p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           p.address.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
     }
 
-    // 2. Availability Filter
     if (_showAvailableOnly) {
       result = result.where((p) => p.isAvailable).toList();
     }
 
-    // 3. Sorting Logic
-    if (_sortBy == 'rating') {
-      result.sort((a, b) => b.rating.compareTo(a.rating));
-    } else {
-      result.sort((a, b) => a.distance.compareTo(b.distance));
-    }
+    // FIX: Custom Sort - Firebase Providers First, OSM Providers Last
+    result.sort((a, b) {
+      int aIsOsm = a.id.startsWith('osm_') ? 1 : 0;
+      int bIsOsm = b.id.startsWith('osm_') ? 1 : 0;
+      
+      // If one is Firebase and one is OSM, Firebase wins
+      if (aIsOsm != bIsOsm) return aIsOsm.compareTo(bIsOsm);
+
+      // Otherwise, sort by the user's selected preference
+      if (_sortBy == 'rating') {
+        return b.rating.compareTo(a.rating);
+      } else {
+        return a.distance.compareTo(b.distance);
+      }
+    });
 
     setState(() => _filteredProviders = result);
   }
@@ -112,7 +119,8 @@ class _MapScreenState extends State<MapScreen> {
       final position = await Geolocator.getCurrentPosition();
       if (mounted) {
         setState(() => _currentPosition = LatLng(position.latitude, position.longitude));
-        _mapController.move(_currentPosition!, 14.0);
+        // FIX: Removed _mapController.move() here. 
+        // The MapOptions initialCenter will handle it when the loading spinner disappears!
       }
     } catch (e) {
       _showErrorDialog('Failed to get location: $e');
@@ -214,7 +222,8 @@ class _MapScreenState extends State<MapScreen> {
 
   List<Marker> _buildMarkers() {
     final markers = <Marker>[];
-    for (final provider in _filteredProviders) {
+  
+    for (final provider in _filteredProviders.reversed) {
       markers.add(Marker(
         width: 52, height: 52,
         point: LatLng(provider.latitude, provider.longitude),

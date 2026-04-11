@@ -176,11 +176,29 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
       List<Provider> temp = _isSearching ? List.from(_filteredProviders) : List.from(_allProviders);
       if (_currentPosition != null) temp = temp.where((p) => (p.distance * 1000) <= _selectedRadius).toList();
       if (_showAvailableOnly) temp = temp.where((p) => p.isAvailable).toList();
-      switch (_sortBy) {
-        case 'distance': temp.sort((a, b) => a.distance.compareTo(b.distance)); break;
-        case 'rating': temp.sort((a, b) => b.rating.compareTo(a.rating)); break;
-        case 'availability': temp.sort((a, b) { if (a.isAvailable == b.isAvailable) return 0; return a.isAvailable ? -1 : 1; }); break;
-      }
+      
+      // FIX: Force Firebase providers to the TOP of the ListView
+      temp.sort((a, b) {
+        bool aIsOsm = a.id.startsWith('osm_');
+        bool bIsOsm = b.id.startsWith('osm_');
+        
+        // If 'a' is Firebase and 'b' is OSM, 'a' goes first (-1)
+        if (!aIsOsm && bIsOsm) return -1;
+        // If 'a' is OSM and 'b' is Firebase, 'b' goes first (1)
+        if (aIsOsm && !bIsOsm) return 1;
+
+        // If they are BOTH Firebase or BOTH OSM, sort them normally by the user's choice
+        switch (_sortBy) {
+          case 'rating': return b.rating.compareTo(a.rating);
+          case 'availability': 
+            if (a.isAvailable == b.isAvailable) return 0;
+            return a.isAvailable ? -1 : 1;
+          case 'distance':
+          default:
+            return a.distance.compareTo(b.distance);
+        }
+      });
+      
       _filteredProviders = temp;
     });
   }

@@ -1,12 +1,14 @@
+import 'package:emergency_res_loc_new/screens/provider_dashboard_screen.dart';
+import 'package:emergency_res_loc_new/screens/provider_main_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart'; 
 import '../screens/home_screen.dart';
 import '../screens/service_selection_screen.dart';
-import '../screens/provider_dashboard_screen.dart';
 import '../screens/manage_services_screen.dart';
-import '../screens/admin_dashboard_screen.dart'; // NEW: Import Admin Screen
+import '../screens/admin_dashboard_screen.dart';
+import '../MainWrapper.dart'; // NEW: Import MainWrapper
 
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
@@ -26,13 +28,10 @@ class AuthWrapper extends StatelessWidget {
         if (snapshot.hasData && snapshot.data != null) {
           final currentUser = snapshot.data!;
 
-          // --- NEW: ADMIN BYPASS ---
-          // If the logged-in user is the admin, send them directly to the dashboard.
-          // Do NOT search for their profile in the Firestore database.
+          // ADMIN BYPASS
           if (currentUser.email == 'admin@resqfinder.com') {
             return const AdminDashboardScreen();
           }
-          // -------------------------
 
           return FutureBuilder<DocumentSnapshot?>(
             future: authService.getUserData(currentUser.uid),
@@ -47,7 +46,7 @@ class AuthWrapper extends StatelessWidget {
               }
 
               if (!userDocSnapshot.hasData || userDocSnapshot.data == null || !userDocSnapshot.data!.exists) {
-                return _buildErrorScreen("User profile not found in database.");
+                return const Scaffold(body: Center(child: CircularProgressIndicator()));
               }
 
               final userData = userDocSnapshot.data!.data() as Map<String, dynamic>?;
@@ -64,7 +63,8 @@ class AuthWrapper extends StatelessWidget {
                 if (!profileComplete) {
                   return const ManageServicesScreen();
                 }
-                return ProviderDashboardScreen(initialTab: '',);
+                // FIX: Route directly to the unified Dashboard! No more double nav bars.
+                return const ProviderDashboardScreen(initialTab: 'new');
               } else {
                 return const ServiceSelectionScreen();
               }
@@ -72,6 +72,7 @@ class AuthWrapper extends StatelessWidget {
           );
         }
         
+        // If not logged in, go to Home Screen
         return const HomeScreen();
       },
     );
