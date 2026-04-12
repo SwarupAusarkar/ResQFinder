@@ -19,51 +19,61 @@ class _HistoryPageState extends State<HistoryPage> {
   Widget build(BuildContext context) {
     final userId = _authService.currentUser?.uid;
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('emergency_requests')
-          .where('status', isEqualTo: 'completed')
-          .orderBy('completedAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              "Error loading history",
-              style: TextStyle(color: Colors.red[300]),
-            ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('History'),
+        backgroundColor: const Color(0xFF0D4F4A),
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _firestore
+            .collection('emergency_requests')
+            .where('status', isEqualTo: 'completed')
+            .orderBy('completedAt', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                "Error loading history: ${snapshot.error}",
+                style: TextStyle(color: Colors.red[300]),
+              ),
+            );
+          }
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation(Color(0xFF00897B)),
+              ),
+            );
+          }
+
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          var requests = snapshot.data!.docs
+              .map((doc) => EmergencyRequest.fromFirestore(doc))
+              .where((req) =>
+          req.offers.any((o) => o.providerId == userId) &&
+              req.status == 'completed')
+              .toList();
+
+          if (requests.isEmpty) {
+            return _buildEmptyState();
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: requests.length,
+            itemBuilder: (context, index) {
+              final req = requests[index];
+              final wasWinner = req.confirmedProviderId == userId;
+              return _buildHistoryCard(req, wasWinner);
+            },
           );
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation(Color(0xFF00897B)),
-            ),
-          );
-        }
-
-        var requests = snapshot.data!.docs
-            .map((doc) => EmergencyRequest.fromFirestore(doc))
-            .where((req) =>
-        req.offers.any((o) => o.providerId == userId) &&
-            req.status == 'completed')
-            .toList();
-
-        if (requests.isEmpty) {
-          return _buildEmptyState();
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: requests.length,
-          itemBuilder: (context, index) {
-            final req = requests[index];
-            final wasWinner = req.confirmedProviderId == userId;
-            return _buildHistoryCard(req, wasWinner);
-          },
-        );
-      },
+        },
+      ),
     );
   }
 

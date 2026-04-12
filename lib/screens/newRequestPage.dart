@@ -26,8 +26,7 @@ class _NewRequestsPageState extends State<NewRequestsPage> {
     setState(() => _isProcessing = true);
 
     try {
-      final requestRef =
-      _firestore.collection('emergency_requests').doc(request.id);
+      final requestRef = _firestore.collection('emergency_requests').doc(request.id);
 
       await _firestore.runTransaction((transaction) async {
         final snapshot = await transaction.get(requestRef);
@@ -42,8 +41,7 @@ class _NewRequestsPageState extends State<NewRequestsPage> {
         }
 
         // Get Provider Info
-        final pSnap =
-        await _firestore.collection('users').doc(providerId).get();
+        final pSnap = await _firestore.collection('users').doc(providerId).get();
         final pData = pSnap.data() ?? {};
 
         final newOffer = RequestOffer(
@@ -101,92 +99,101 @@ class _NewRequestsPageState extends State<NewRequestsPage> {
   Widget build(BuildContext context) {
     final userId = _authService.currentUser?.uid;
 
-    return Column(
-      children: [
-        // Time Filter Chips
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              _buildTimeChip('All', 'all'),
-              const SizedBox(width: 8),
-              _buildTimeChip('Today', 'today'),
-              const SizedBox(width: 8),
-              _buildTimeChip('This Week', 'week'),
-            ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('New Requests'),
+        backgroundColor: const Color(0xFF0D4F4A),
+      ),
+      body: Column(
+        children: [
+          // Time Filter Chips with horizontal scroll to avoid overflow
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildTimeChip('All', 'all'),
+                  const SizedBox(width: 8),
+                  _buildTimeChip('Today', 'today'),
+                  const SizedBox(width: 8),
+                  _buildTimeChip('This Week', 'week'),
+                ],
+              ),
+            ),
           ),
-        ),
 
-        // Request List
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: _firestore
-                .collection('emergency_requests')
-                .where('status', isEqualTo: 'pending')
-                .orderBy('timestamp', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Center(
-                  child: Text(
-                    "Error loading requests",
-                    style: TextStyle(color: Colors.red[300]),
-                  ),
-                );
-              }
-
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation(Color(0xFF00897B)),
-                  ),
-                );
-              }
-
-              var requests = snapshot.data!.docs
-                  .map((doc) => EmergencyRequest.fromFirestore(doc))
-                  .toList();
-
-              // Filter out already offered/declined
-              requests = requests.where((req) {
-                final hasOffered =
-                req.offers.any((o) => o.providerId == userId);
-                final hasDeclined =
-                (req.declinedBy ?? []).contains(userId);
-                return !hasOffered && !hasDeclined;
-              }).toList();
-
-              // Apply time filter
-              requests = requests
-                  .where((r) => _matchesTimeFilter(r.timestamp))
-                  .toList();
-
-              if (requests.isEmpty) {
-                return _buildEmptyState();
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: requests.length,
-                itemBuilder: (context, index) {
-                  final req = requests[index];
-                  return RequestCard(
-                    request: req,
-                    onAccept: () => _acceptRequest(req),
-                    onDecline: () => _firestore
-                        .collection('emergency_requests')
-                        .doc(req.id)
-                        .update({
-                      'declinedBy': FieldValue.arrayUnion([userId]),
-                    }),
+          // Request List
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _firestore
+                  .collection('emergency_requests')
+                  .where('status', isEqualTo: 'pending')
+                  .orderBy('timestamp', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      "Error loading requests: ${snapshot.error}",
+                      style: TextStyle(color: Colors.red[300]),
+                    ),
                   );
-                },
-              );
-            },
+                }
+
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation(Color(0xFF00897B)),
+                    ),
+                  );
+                }
+
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                var requests = snapshot.data!.docs
+                    .map((doc) => EmergencyRequest.fromFirestore(doc))
+                    .toList();
+
+                // Filter out already offered/declined
+                requests = requests.where((req) {
+                  final hasOffered = req.offers.any((o) => o.providerId == userId);
+                  final hasDeclined = (req.declinedBy ?? []).contains(userId);
+                  return !hasOffered && !hasDeclined;
+                }).toList();
+
+                // Apply time filter
+                requests = requests.where((r) => _matchesTimeFilter(r.timestamp)).toList();
+
+                if (requests.isEmpty) {
+                  return _buildEmptyState();
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: requests.length,
+                  itemBuilder: (context, index) {
+                    final req = requests[index];
+                    return RequestCard(
+                      request: req,
+                      onAccept: () => _acceptRequest(req),
+                      onDecline: () => _firestore
+                          .collection('emergency_requests')
+                          .doc(req.id)
+                          .update({
+                        'declinedBy': FieldValue.arrayUnion([userId]),
+                      }),
+                    );
+                  },
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -200,8 +207,7 @@ class _NewRequestsPageState extends State<NewRequestsPage> {
           color: isSelected ? const Color(0xFF00897B) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color:
-            isSelected ? const Color(0xFF00897B) : Colors.grey[300]!,
+            color: isSelected ? const Color(0xFF00897B) : Colors.grey[300]!,
             width: 1.5,
           ),
         ),

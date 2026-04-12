@@ -219,12 +219,16 @@ class _InventorySliverHeader extends StatelessWidget {
   final int totalCount;
   final int criticalCount;
 
-  const _InventorySliverHeader({required this.providerName, required this.totalCount, required this.criticalCount});
+  const _InventorySliverHeader({
+    required this.providerName,
+    required this.totalCount,
+    required this.criticalCount,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SliverAppBar(
-      expandedHeight: 160,
+      expandedHeight: 60, // reduced height
       floating: false,
       pinned: true,
       elevation: 0,
@@ -237,26 +241,45 @@ class _InventorySliverHeader extends StatelessWidget {
         IconButton(icon: const Icon(Icons.notifications_none_rounded, color: Colors.white), onPressed: () {}),
         Padding(
           padding: const EdgeInsets.only(right: 12),
-          child: CircleAvatar(radius: 16, backgroundColor: Colors.white24, child: const Icon(Icons.person, color: Colors.white, size: 18)),
+          child: CircleAvatar(
+            radius: 16,
+            backgroundColor: Colors.white24,
+            child: const Icon(Icons.person, color: Colors.white, size: 18),
+          ),
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
           color: const Color(0xFF0D4F4A),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 90, 20, 20),
+            padding: const EdgeInsets.fromLTRB(72, 20, 20, 8), // shifted upward
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(providerName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
-                const SizedBox(height: 10),
+                Text(
+                  providerName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Row(
                   children: [
-                    _StatPill(label: '$totalCount Items', icon: Icons.inventory_2_rounded, color: Colors.white.withOpacity(0.2)),
+                    _StatPill(
+                      label: '$totalCount Items',
+                      icon: Icons.inventory_2_rounded,
+                      color: Colors.white.withOpacity(0.2),
+                    ),
                     const SizedBox(width: 8),
                     if (criticalCount > 0)
-                      _StatPill(label: '$criticalCount Critical', icon: Icons.warning_amber_rounded, color: const Color(0xFFDC2626).withOpacity(0.7)),
+                      _StatPill(
+                        label: '$criticalCount Critical',
+                        icon: Icons.warning_amber_rounded,
+                        color: const Color(0xFFDC2626).withOpacity(0.7),
+                      ),
                   ],
                 ),
               ],
@@ -267,6 +290,7 @@ class _InventorySliverHeader extends StatelessWidget {
     );
   }
 }
+
 
 class _StatPill extends StatelessWidget {
   final String label;

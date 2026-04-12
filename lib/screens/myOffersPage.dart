@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/services.dart';
 import '../../models/request_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/HandShakeService.dart';
@@ -21,51 +20,60 @@ class _MyOffersPageState extends State<MyOffersPage> {
   Widget build(BuildContext context) {
     final userId = _authService.currentUser?.uid;
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('emergency_requests')
-          .where('status', whereIn: ['pending', 'confirmed'])
-          .orderBy('timestamp', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              "Error loading offers",
-              style: TextStyle(color: Colors.red[300]),
-            ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Offers'),
+        backgroundColor: const Color(0xFF0D4F4A),
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _firestore
+            .collection('emergency_requests')
+            .where('status', whereIn: ['pending', 'confirmed'])
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                "Error loading offers: ${snapshot.error}",
+                style: TextStyle(color: Colors.red[300]),
+              ),
+            );
+          }
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation(Color(0xFF00897B)),
+              ),
+            );
+          }
+
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          var requests = snapshot.data!.docs
+              .map((doc) => EmergencyRequest.fromFirestore(doc))
+              .where((req) => req.offers.any((o) => o.providerId == userId))
+              .toList();
+
+          if (requests.isEmpty) {
+            return _buildEmptyState();
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: requests.length,
+            itemBuilder: (context, index) {
+              final req = requests[index];
+              final isWinner = req.status == 'confirmed' &&
+                  req.confirmedProviderId == userId;
+
+              return _buildOfferCard(req, isWinner);
+            },
           );
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation(Color(0xFF00897B)),
-            ),
-          );
-        }
-
-        var requests = snapshot.data!.docs
-            .map((doc) => EmergencyRequest.fromFirestore(doc))
-            .where((req) => req.offers.any((o) => o.providerId == userId))
-            .toList();
-
-        if (requests.isEmpty) {
-          return _buildEmptyState();
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: requests.length,
-          itemBuilder: (context, index) {
-            final req = requests[index];
-            final isWinner = req.status == 'confirmed' &&
-                req.confirmedProviderId == userId;
-
-            return _buildOfferCard(req, isWinner);
-          },
-        );
-      },
+        },
+      ),
     );
   }
 
