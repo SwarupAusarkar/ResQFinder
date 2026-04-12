@@ -46,14 +46,24 @@ class LiveDataService {
 
     // 1. Fetch from Firestore (registered providers)
     try {
+      // FIX: Removed strict 'type' query. Fetch all approved and filter smartly.
       final firestoreProviders = await _firestore
           .collection('providers')
-          .where('type', isEqualTo: serviceType)
           .where('profileComplete', isEqualTo: true)
           .where('verificationStatus', isEqualTo: 'approved')
           .get();
 
-      allProviders.addAll(firestoreProviders.docs.map((doc) {
+      final targetType = serviceType.toLowerCase();
+
+      // Smart filter: checks both 'providerType' and 'type' for the keyword
+      final matchedDocs = firestoreProviders.docs.where((doc) {
+        final data = doc.data();
+        final dbType = (data['providerType'] ?? data['type'] ?? '').toString().toLowerCase();
+        
+        return dbType.contains(targetType) || targetType == 'all';
+      }).toList();
+
+      allProviders.addAll(matchedDocs.map((doc) {
         return Provider.fromJson(doc.id, doc.data() as Map<String, dynamic>);
       }));
     } catch (e) {
@@ -71,7 +81,7 @@ class LiveDataService {
           osmKey = 'amenity=police';
           break;
         case "ambulance":
-          osmKey = 'amenity=clinic'; // OSM often tags ambulance stations as clinics/hospitals
+          osmKey = 'amenity=clinic'; 
           break;
         default:
           osmKey = 'amenity=hospital';
@@ -92,7 +102,6 @@ class LiveDataService {
         final data = json.decode(response.body);
         final elements = data["elements"] as List<dynamic>;
 
-        // Cleaned up: Single mapping to avoid triple-duplicates
         final osmProviders = elements.map((e) {
           final tags = e["tags"] ?? {};
           return Provider(
@@ -107,7 +116,7 @@ class LiveDataService {
             isAvailable: true,
             rating: 4.0,
             description: "Public $serviceType data from OpenStreetMap",
-            inventory: [], // OSM data won't have your app's specific inventory items
+            inventory: [], 
             noOfApprovedRequests: 0,
             verificationType: tags["verificationType"] ?? 'osm_verified',
             fcmToken: '',

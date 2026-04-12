@@ -227,7 +227,7 @@ class _OfflineRegionPickerScreenState extends State<OfflineRegionPickerScreen> {
                     Text("Search Radius: ${_radiusKm.toInt()} km", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     Slider(
                       value: _radiusKm,
-                      min: 5, max: 100, divisions: 19,
+                      min: 5, max: 25, divisions: 20,
                       label: "${_radiusKm.toInt()} km",
                       onChanged: (val) => setState(() => _radiusKm = val),
                     ),

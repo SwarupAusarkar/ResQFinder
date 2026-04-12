@@ -5,6 +5,7 @@ import 'package:flutter_contacts_service/flutter_contacts_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/requester_model.dart';
 import '../services/auth_service.dart';
+import 'offline_provider_list_screen.dart';
 import '../services/location_service.dart';
 import 'offline_region_picker_screen.dart';
 
@@ -796,52 +797,68 @@ class _OfflineRegionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE3F2FD)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE3F2FD),
-              borderRadius: BorderRadius.circular(10),
+    // FIX: Wrapped in GestureDetector to make it clickable
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OfflineProviderListScreen(
+              regionName: location['name'] ?? 'Saved Trip',
+              lat: (location['latitude'] as num).toDouble(),
+              lng: (location['longitude'] as num).toDouble(),
+              radiusKm: (location['radius'] as num).toDouble(),
             ),
-            child: const Icon(Icons.offline_pin_rounded, size: 18, color: Color(0xFF1565C0)),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  location['name'] ?? 'Saved Trip',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF212121),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE3F2FD)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3F2FD),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.offline_pin_rounded, size: 18, color: Color(0xFF1565C0)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    location['name'] ?? 'Saved Trip',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF212121),
+                    ),
                   ),
-                ),
-                Text(
-                  'Radius: ${location['radius']} km',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF9E9E9E)),
-                ),
-              ],
+                  Text(
+                    'Radius: ${location['radius']} km',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF9E9E9E)),
+                  ),
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFBDBDBD), size: 20),
-            onPressed: () => onDelete(location),
-          ),
-        ],
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFBDBDBD), size: 20),
+              onPressed: () => onDelete(location),
+            ),
+          ],
+        ),
       ),
     );
   }

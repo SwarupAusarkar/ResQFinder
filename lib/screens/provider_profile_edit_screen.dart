@@ -29,15 +29,19 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
   final _reviewService = ReviewService();
   final _picker = ImagePicker();
 
-  // ── Controllers (ALL UNCHANGED) ──────────────────────────────────────────────
+  // ── Controllers ──────────────────────────────────────────────────────────────
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _latController = TextEditingController();
   final _lonController = TextEditingController();
+  
+  // NEW: Added HFR and NMC controllers here
+  final _hfrController = TextEditingController();
+  final _nmcController = TextEditingController();
 
-  // ── State (ALL UNCHANGED) ────────────────────────────────────────────────────
+  // ── State ────────────────────────────────────────────────────────────────────
   bool _isLoading = true;
   bool _isSaving = false;
   String _verificationStatus = 'pending';
@@ -46,7 +50,6 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
   File? _newCertificateImage;
   List<File> _newFacilityImages = [];
 
-  // NEW: ratings & inventory fetched from Firestore
   double _avgRating = 0.0;
   int _reviewCount = 0;
   String _summaryReview = 'No summary available yet.';
@@ -61,7 +64,20 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
     _loadProviderData();
   }
 
-  // ── Load (merged from both old files) ────────────────────────────────────────
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    _descriptionController.dispose();
+    _latController.dispose();
+    _lonController.dispose();
+    _hfrController.dispose();
+    _nmcController.dispose();
+    super.dispose();
+  }
+
+  // ── Load ─────────────────────────────────────────────────────────────────────
   Future<void> _loadProviderData() async {
     final user = _authService.currentUser;
     if (user == null) return;
@@ -75,6 +91,11 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
         _descriptionController.text = d['description'] ?? '';
         _latController.text = (d['latitude'] as num?)?.toString() ?? '';
         _lonController.text = (d['longitude'] as num?)?.toString() ?? '';
+        
+        // Load Verification IDs
+        _hfrController.text = d['hfrId'] ?? '';
+        _nmcController.text = d['nmcId'] ?? '';
+
         _verificationStatus = d['verificationStatus'] ?? 'pending';
         _existingCertUrl =
             (d['certificateUrl'] as String?)?.isEmpty == true
@@ -89,6 +110,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
         _inventoryItems =
             rawInv.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       }
+      
       // AI summary via ReviewService
       final stats = await _reviewService.getProviderStats(user.uid);
       if (mounted) {
@@ -105,7 +127,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
     }
   }
 
-  // ── Image picking (UNCHANGED) ─────────────────────────────────────────────────
+  // ── Image picking ────────────────────────────────────────────────────────────
   Future<void> _pickCertificate() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -123,7 +145,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
     }
   }
 
-  // ── GPS sync (UNCHANGED) ──────────────────────────────────────────────────────
+  // ── GPS sync ─────────────────────────────────────────────────────────────────
   Future<void> _updateLocation() async {
     setState(() => _isSaving = true);
     try {
@@ -152,7 +174,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
     }
   }
 
-  // ── Save (UNCHANGED) ──────────────────────────────────────────────────────────
+  // ── Save ─────────────────────────────────────────────────────────────────────
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
@@ -178,6 +200,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
         await ref.putFile(_newFacilityImages[i]);
         finalFacilityUrls.add(await ref.getDownloadURL());
       }
+      
       await _firestore.collection('providers').doc(user.uid).update({
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
@@ -188,7 +211,10 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
         'certificateUrl': finalCertUrl ?? '',
         'facilityUrls': finalFacilityUrls,
         'isAvailable': _isAvailable,
+        'hfrId': _hfrController.text.trim(),
+        'nmcId': _nmcController.text.trim(),
       });
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -197,7 +223,6 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
             behavior: SnackBarBehavior.floating,
           ),
         );
-        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -225,12 +250,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
 
     return Scaffold(
       backgroundColor: _bgColor,
-      // ── Sticky bottom bar ──────────────────────────────────────────────────────
-      bottomNavigationBar: _BottomActionBar(
-        isSaving: _isSaving,
-        onDirections: () {}, // hook up real directions logic here
-        onCall: () {}, // hook up url_launcher here
-      ),
+      // Removed the BottomActionBar to declutter
       body: Form(
         key: _formKey,
         child: CustomScrollView(
@@ -249,9 +269,6 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
                 onAvailableToggle: (v) => setState(() => _isAvailable = v),
                 onSave: _saveProfile,
                 isSaving: _isSaving,
-                onVerify: () {
-                  Navigator.pushNamed(context, '/provider-registration');
-                },
               ),
             ),
 
@@ -261,48 +278,18 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Live inventory ─────────────────────────────────────────
-                    _SectionHeader(
-                      label: 'Live Inventory',
-                      trailing: _LiveBadge(),
-                    ),
+                    // ── Edit fields (Permanently Expanded) ─────────────────────
+                    _SectionHeader(label: 'Profile Settings'),
                     const SizedBox(height: 12),
-                    _LiveInventoryGrid(items: _inventoryItems),
-                    const SizedBox(height: 24),
-
-                    // ── About provider ─────────────────────────────────────────
-                    _SectionHeader(label: 'About Provider'),
-                    const SizedBox(height: 12),
-                    _AboutProviderRow(description: _descriptionController.text),
-                    const SizedBox(height: 24),
-
-                    // ── Rating & feedback summary ──────────────────────────────
-                    _SectionHeader(label: 'Patient Feedback'),
-                    const SizedBox(height: 12),
-                    _RatingSummaryCard(
-                      avgRating: _avgRating,
-                      reviewCount: _reviewCount,
-                      summary: _summaryReview,
-                    ),
-                    const SizedBox(height: 24),
-
-                    // ── Contact info ───────────────────────────────────────────
-                    _SectionHeader(label: 'Contact Info'),
-                    const SizedBox(height: 12),
-                    _ContactInfoCard(
-                      address: _addressController.text,
-                      phone: _phoneController.text,
-                    ),
-                    const SizedBox(height: 24),
-
-                    // ── Edit fields (collapsible card) ─────────────────────────
-                    _EditFieldsCard(
+                    _EditProfileForm(
                       nameController: _nameController,
                       phoneController: _phoneController,
                       addressController: _addressController,
                       descriptionController: _descriptionController,
                       latController: _latController,
                       lonController: _lonController,
+                      hfrController: _hfrController,
+                      nmcController: _nmcController,
                       existingCertUrl: _existingCertUrl,
                       newCertImage: _newCertificateImage,
                       existingFacilityUrls: _existingFacilityUrls,
@@ -313,9 +300,28 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
                       onRemoveFacility:
                           (f) => setState(() => _newFacilityImages.remove(f)),
                       onSyncGps: _updateLocation,
-                      onSave: _saveProfile, onVerify: () {  },
+                      onSave: _saveProfile,
                     ),
-                    const SizedBox(height: 100), // space for bottom bar
+                    const SizedBox(height: 24),
+
+                    // ── Live inventory ─────────────────────────────────────────
+                    _SectionHeader(
+                      label: 'Live Inventory',
+                      trailing: _LiveBadge(),
+                    ),
+                    const SizedBox(height: 12),
+                    _LiveInventoryGrid(items: _inventoryItems),
+                    const SizedBox(height: 24),
+
+                    // ── Rating & feedback summary ──────────────────────────────
+                    _SectionHeader(label: 'Patient Feedback'),
+                    const SizedBox(height: 12),
+                    _RatingSummaryCard(
+                      avgRating: _avgRating,
+                      reviewCount: _reviewCount,
+                      summary: _summaryReview,
+                    ),
+                    const SizedBox(height: 40), 
                   ],
                 ),
               ),
@@ -339,8 +345,6 @@ class _HeroHeader extends StatelessWidget {
   final void Function(bool) onAvailableToggle;
   final VoidCallback onSave;
 
-  final VoidCallback onVerify;
-
   const _HeroHeader({
     required this.name,
     required this.address,
@@ -353,7 +357,6 @@ class _HeroHeader extends StatelessWidget {
     required this.onAvailableToggle,
     required this.onSave,
     required this.isSaving,
-    required this.onVerify,
   });
 
   @override
@@ -380,22 +383,19 @@ class _HeroHeader extends StatelessWidget {
                   ),
                   const Spacer(),
 
-                  GestureDetector(
-                    onTap: onVerify,
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isVerified ? const Color(0xFFDCFCE7) : Colors.orange,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        isVerified ? 'Verified ✓' : 'Verify',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: isVerified ? const Color(0xFF16A34A) : Colors.white,
-                        ),
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isVerified ? const Color(0xFFDCFCE7) : Colors.orange.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      isVerified ? 'Verified ✓' : 'Unverified',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: isVerified ? const Color(0xFF16A34A) : Colors.orange[800],
                       ),
                     ),
                   ),
@@ -544,9 +544,9 @@ class _HeroHeader extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _StatCard(
-                      icon: Icons.near_me_rounded,
-                      label: 'Distance',
-                      value: '1.2 km',
+                      icon: Icons.inventory_2_rounded,
+                      label: 'Provider Type',
+                      value: providerType.toUpperCase(),
                       iconColor: _teal,
                     ),
                   ),
@@ -577,256 +577,44 @@ class _HeroHeader extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LIVE INVENTORY
+// EDIT PROFILE FORM (Un-collapsed)
 // ─────────────────────────────────────────────────────────────────────────────
-class _LiveBadge extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFEE2E2),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: const Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.fiber_manual_record, size: 8, color: Color(0xFFDC2626)),
-        SizedBox(width: 4),
-        Text(
-          'LIVE',
-          style: TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFFDC2626),
-            letterSpacing: 0.5,
-          ),
-        ),
-      ],
-    ),
-  );
-}
+class _EditProfileForm extends StatelessWidget {
+  final TextEditingController nameController,
+      phoneController,
+      addressController,
+      descriptionController,
+      latController,
+      lonController,
+      hfrController,
+      nmcController;
+  final String? existingCertUrl;
+  final File? newCertImage;
+  final List<String> existingFacilityUrls;
+  final List<File> newFacilityImages;
+  final bool isSyncing;
+  final VoidCallback onPickCert, onPickFacility, onSyncGps, onSave;
+  final void Function(File) onRemoveFacility;
 
-class _LiveInventoryGrid extends StatelessWidget {
-  final List<Map<String, dynamic>> items;
-  const _LiveInventoryGrid({required this.items});
-
-  static IconData _icon(String n) {
-    n = n.toLowerCase();
-    if (n.contains('blood')) return Icons.bloodtype_rounded;
-    if (n.contains('icu') || n.contains('bed')) return Icons.bed_rounded;
-    if (n.contains('ventilator')) return Icons.air_rounded;
-    if (n.contains('oxygen') || n.contains('cylinder'))
-      return Icons.bubble_chart_rounded;
-    return Icons.medical_services_rounded;
-  }
-
-  static Color _dot(int qty) =>
-      qty > 0 ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
-
-  @override
-  Widget build(BuildContext context) {
-    // Show max 4 items in a 2×2 grid
-    final display = items.take(4).toList();
-    if (display.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Center(
-          child: Text(
-            'No inventory data',
-            style: TextStyle(color: Colors.grey[400]),
-          ),
-        ),
-      );
-    }
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.6,
-      ),
-      itemCount: display.length,
-      itemBuilder: (_, i) {
-        final item = display[i];
-        final name = item['name'] as String? ?? '—';
-        final qty = (item['quantity'] as num?)?.toInt() ?? 0;
-        final unit = item['unit'] as String? ?? '';
-        return _InventoryTile(
-          icon: _icon(name),
-          name: name,
-          quantity: qty,
-          unit: unit,
-          dotColor: _dot(qty),
-        );
-      },
-    );
-  }
-}
-
-class _InventoryTile extends StatelessWidget {
-  final IconData icon;
-  final String name, unit;
-  final int quantity;
-  final Color dotColor;
-
-  const _InventoryTile({
-    required this.icon,
-    required this.name,
-    required this.quantity,
-    required this.unit,
-    required this.dotColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 20, color: _teal),
-              const Spacer(),
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: dotColor,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          Text(
-            quantity == 0
-                ? '0 Available'
-                : '$quantity ${unit.isNotEmpty ? unit : 'Units'}',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              color: _tealDark,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(name, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ABOUT PROVIDER
-// ─────────────────────────────────────────────────────────────────────────────
-class _AboutProviderRow extends StatelessWidget {
-  final String description;
-  const _AboutProviderRow({required this.description});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: _AboutCard(
-            icon: '🏥',
-            title: 'Specialties',
-            body:
-                description.isEmpty
-                    ? 'Multi-specialty care including Cardiac, Trauma, and '
-                        'Neonatal intensive care units.'
-                    : description,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _AboutCard(
-            icon: '🛡',
-            title: 'NABH',
-            body: 'NABH emergency certified facility.\nNavi M…',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AboutCard extends StatelessWidget {
-  final String icon, title, body;
-  const _AboutCard({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(icon, style: const TextStyle(fontSize: 22)),
-          const SizedBox(height: 6),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: _tealDark,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            body,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey[500],
-              height: 1.4,
-            ),
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// RATING SUMMARY CARD
-// ─────────────────────────────────────────────────────────────────────────────
-class _RatingSummaryCard extends StatelessWidget {
-  final double avgRating;
-  final int reviewCount;
-  final String summary;
-  const _RatingSummaryCard({
-    required this.avgRating,
-    required this.reviewCount,
-    required this.summary,
+  const _EditProfileForm({
+    required this.nameController,
+    required this.phoneController,
+    required this.addressController,
+    required this.descriptionController,
+    required this.latController,
+    required this.lonController,
+    required this.hfrController,
+    required this.nmcController,
+    required this.existingCertUrl,
+    required this.newCertImage,
+    required this.existingFacilityUrls,
+    required this.newFacilityImages,
+    required this.isSyncing,
+    required this.onPickCert,
+    required this.onPickFacility,
+    required this.onRemoveFacility,
+    required this.onSyncGps,
+    required this.onSave,
   });
 
   @override
@@ -843,437 +631,120 @@ class _RatingSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.stars_rounded,
-                color: Color(0xFFF59E0B),
-                size: 26,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                avgRating.toStringAsFixed(1),
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: _tealDark,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '($reviewCount reviews)',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-              ),
-            ],
+          _EditField(
+            controller: nameController,
+            label: 'FACILITY NAME',
+            hint: 'Shanti Hospital',
           ),
-          const Divider(height: 20, color: Color(0xFFF1F5F9)),
+          const SizedBox(height: 12),
+          _EditField(
+            controller: phoneController,
+            label: 'PHONE',
+            hint: '+91 99999 99999',
+            keyboardType: TextInputType.phone,
+          ),
+          const SizedBox(height: 12),
+          _EditField(
+            controller: addressController,
+            label: 'ADDRESS',
+            hint: 'Full address',
+            maxLines: 2,
+          ),
+          const SizedBox(height: 12),
+          _EditField(
+            controller: descriptionController,
+            label: 'DESCRIPTION & SERVICES',
+            hint: 'Services offered…',
+            maxLines: 3,
+          ),
+          
+          const SizedBox(height: 24),
           const Text(
-            'PATIENT FEEDBACK SUMMARY',
+            'VERIFICATION DOCUMENTS',
             style: TextStyle(
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: FontWeight.w800,
               color: _teal,
               letterSpacing: 1.2,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            '"$summary"',
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey[700],
-              fontStyle: FontStyle.italic,
-              height: 1.4,
-            ),
+          const SizedBox(height: 12),
+          _EditField(
+            controller: hfrController,
+            label: 'HFR ID (OPTIONAL)',
+            hint: 'HFR-XXXXXXXX',
+            isRequired: false,
           ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CONTACT INFO CARD
-// ─────────────────────────────────────────────────────────────────────────────
-class _ContactInfoCard extends StatelessWidget {
-  final String address, phone;
-  const _ContactInfoCard({required this.address, required this.phone});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
-        ],
-      ),
-      child: Column(
-        children: [
-          _ContactRow(
-            icon: Icons.location_on_rounded,
-            iconColor: _teal,
-            label: 'ADDRESS',
-            value: address.isEmpty ? '—' : address,
+          const SizedBox(height: 12),
+          _EditField(
+            controller: nmcController,
+            label: 'NMC DOCTOR ID (OPTIONAL)',
+            hint: 'NMC-XXXXXXXX',
+            isRequired: false,
           ),
-          Divider(
-            height: 1,
-            indent: 16,
-            endIndent: 16,
-            color: Colors.grey.withOpacity(0.12),
+          const SizedBox(height: 16),
+          _CertificateUploadRow(
+            existingUrl: existingCertUrl,
+            newImage: newCertImage,
+            onPick: onPickCert,
           ),
-          _ContactRow(
-            icon: Icons.phone_rounded,
-            iconColor: const Color(0xFF16A34A),
-            label: 'EMERGENCY LINE',
-            value: phone.isEmpty ? '—' : phone,
+          const SizedBox(height: 20),
+
+          _FacilityPhotosRow(
+            existingUrls: existingFacilityUrls,
+            newImages: newFacilityImages,
+            onPickMore: onPickFacility,
+            onRemove: onRemoveFacility,
           ),
-        ],
-      ),
-    );
-  }
-}
+          const SizedBox(height: 20),
 
-class _ContactRow extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String label, value;
-  const _ContactRow({
-    required this.icon,
-    required this.iconColor,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, size: 18, color: iconColor),
+          _GpsRow(
+            latController: latController,
+            lonController: lonController,
+            isSyncing: isSyncing,
+            onSync: onSyncGps,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF94A3B8),
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _tealDark,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+          const SizedBox(height: 24),
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EDIT FIELDS CARD  (collapsible, shown below the read-only view)
-// ─────────────────────────────────────────────────────────────────────────────
-class _EditFieldsCard extends StatefulWidget {
-  final TextEditingController nameController,
-      phoneController,
-      addressController,
-      descriptionController,
-      latController,
-      lonController;
-  final String? existingCertUrl;
-  final File? newCertImage;
-  final List<String> existingFacilityUrls;
-  final List<File> newFacilityImages;
-  final bool isSyncing;
-  final VoidCallback onPickCert, onPickFacility, onSyncGps, onSave, onVerify;
-  final void Function(File) onRemoveFacility;
-
-  const _EditFieldsCard({
-    required this.nameController,
-    required this.phoneController,
-    required this.addressController,
-    required this.descriptionController,
-    required this.latController,
-    required this.lonController,
-    required this.existingCertUrl,
-    required this.newCertImage,
-    required this.existingFacilityUrls,
-    required this.newFacilityImages,
-    required this.isSyncing,
-    required this.onPickCert,
-    required this.onPickFacility,
-    required this.onRemoveFacility,
-    required this.onSyncGps,
-    required this.onSave, required this.onVerify,
-  });
-
-  @override
-  State<_EditFieldsCard> createState() => _EditFieldsCardState();
-}
-
-class _EditFieldsCardState extends State<_EditFieldsCard> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Header toggle
+          // Save Changes Button
           GestureDetector(
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
-                  const Icon(Icons.edit_rounded, size: 16, color: _teal),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Edit Profile Details',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: _tealDark,
-                    ),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    color: Colors.grey[400],
-                  ),
+            onTap: isSyncing ? null : onSave,
+            child: Container(
+              width: double.infinity,
+              height: 50,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [_tealDark, _teal],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(color: _teal.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4)),
                 ],
               ),
-            ),
-          ),
-
-          // Expanded content
-          if (_expanded) ...[
-            const Divider(height: 1, color: Color(0xFFF1F5F9)),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _EditField(
-                    controller: widget.nameController,
-                    label: 'FACILITY NAME',
-                    hint: 'Shanti Hospital',
-                  ),
-                  const SizedBox(height: 12),
-                  _EditField(
-                    controller: widget.phoneController,
-                    label: 'PHONE',
-                    hint: '+91 99999 99999',
-                    keyboardType: TextInputType.phone,
-                  ),
-                  const SizedBox(height: 12),
-                  _EditField(
-                    controller: widget.addressController,
-                    label: 'ADDRESS',
-                    hint: 'Full address',
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 12),
-                  _EditField(
-                    controller: widget.descriptionController,
-                    label: 'DESCRIPTION',
-                    hint: 'Services offered…',
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Certificate
-                  _CertificateUploadRow(
-                    existingUrl: widget.existingCertUrl,
-                    newImage: widget.newCertImage,
-                    onPick: widget.onPickCert,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Facility photos
-                  _FacilityPhotosRow(
-                    existingUrls: widget.existingFacilityUrls,
-                    newImages: widget.newFacilityImages,
-                    onPickMore: widget.onPickFacility,
-                    onRemove: widget.onRemoveFacility,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // GPS
-                  _GpsRow(
-                    latController: widget.latController,
-                    lonController: widget.lonController,
-                    isSyncing: widget.isSyncing,
-                    onSync: widget.onSyncGps,
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Save
-                  GestureDetector(
-                    onTap: widget.isSyncing ? null : widget.onSave,
-                    child: Container(
-                      width: double.infinity,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [_tealDark, _teal],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                        borderRadius: BorderRadius.circular(14),
+              child: Center(
+                child: isSyncing
+                    ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
                       ),
-                      child: Center(
-                        child:
-                            widget.isSyncing
-                                ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                                : const Text(
-                                  'Save Changes',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                    )
+                    : const Text(
+                      'Save All Changes',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
                       ),
                     ),
-                  ),
-                ],
               ),
             ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BOTTOM ACTION BAR  (Get Directions | Call Now)
-// ─────────────────────────────────────────────────────────────────────────────
-class _BottomActionBar extends StatelessWidget {
-  final bool isSaving;
-  final VoidCallback onDirections, onCall;
-  const _BottomActionBar({
-    required this.isSaving,
-    required this.onDirections,
-    required this.onCall,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, -4),
           ),
         ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _ActionBtn(
-              icon: Icons.near_me_rounded,
-              label: 'Get Directions',
-              outlined: true,
-              onTap: onDirections,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _ActionBtn(
-              icon: Icons.phone_rounded,
-              label: 'Call Now',
-              outlined: false,
-              onTap: onCall,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionBtn extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool outlined;
-  final VoidCallback onTap;
-  const _ActionBtn({
-    required this.icon,
-    required this.label,
-    required this.outlined,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 50,
-        decoration: BoxDecoration(
-          color: outlined ? Colors.white : _teal,
-          borderRadius: BorderRadius.circular(14),
-          border: outlined ? Border.all(color: _teal, width: 1.5) : null,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18, color: outlined ? _teal : Colors.white),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: outlined ? _teal : Colors.white,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1290,22 +761,19 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 0),
-      child: Row(
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: _tealDark,
-            ),
+    return Row(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: _tealDark,
           ),
-          const Spacer(),
-          if (trailing != null) trailing!,
-        ],
-      ),
+        ),
+        const Spacer(),
+        if (trailing != null) trailing!,
+      ],
     );
   }
 }
@@ -1352,7 +820,7 @@ class _StatCard extends StatelessWidget {
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: _tealDark,
                   ),
@@ -1366,18 +834,19 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// Edit-mode field
 class _EditField extends StatelessWidget {
   final TextEditingController controller;
   final String label, hint;
   final TextInputType? keyboardType;
   final int maxLines;
+  final bool isRequired;
   const _EditField({
     required this.controller,
     required this.label,
     required this.hint,
     this.keyboardType,
     this.maxLines = 1,
+    this.isRequired = true,
   });
 
   @override
@@ -1414,7 +883,7 @@ class _EditField extends StatelessWidget {
               vertical: 13,
             ),
           ),
-          validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+          validator: isRequired ? (v) => v?.isEmpty ?? true ? 'Required' : null : null,
         ),
       ),
     ],
@@ -1694,6 +1163,236 @@ class _GpsRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LIVE INVENTORY
+// ─────────────────────────────────────────────────────────────────────────────
+class _LiveBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFEE2E2),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.fiber_manual_record, size: 8, color: Color(0xFFDC2626)),
+        SizedBox(width: 4),
+        Text(
+          'LIVE',
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFFDC2626),
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _LiveInventoryGrid extends StatelessWidget {
+  final List<Map<String, dynamic>> items;
+  const _LiveInventoryGrid({required this.items});
+
+  static IconData _icon(String n) {
+    n = n.toLowerCase();
+    if (n.contains('blood')) return Icons.bloodtype_rounded;
+    if (n.contains('icu') || n.contains('bed')) return Icons.bed_rounded;
+    if (n.contains('ventilator')) return Icons.air_rounded;
+    if (n.contains('oxygen') || n.contains('cylinder'))
+      return Icons.bubble_chart_rounded;
+    return Icons.medical_services_rounded;
+  }
+
+  static Color _dot(int qty) =>
+      qty > 0 ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
+
+  @override
+  Widget build(BuildContext context) {
+    final display = items.take(4).toList();
+    if (display.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Center(
+          child: Text(
+            'No inventory data',
+            style: TextStyle(color: Colors.grey[400]),
+          ),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1.6,
+      ),
+      itemCount: display.length,
+      itemBuilder: (_, i) {
+        final item = display[i];
+        final name = item['name'] as String? ?? '—';
+        final qty = (item['quantity'] as num?)?.toInt() ?? 0;
+        final unit = item['unit'] as String? ?? '';
+        return _InventoryTile(
+          icon: _icon(name),
+          name: name,
+          quantity: qty,
+          unit: unit,
+          dotColor: _dot(qty),
+        );
+      },
+    );
+  }
+}
+
+class _InventoryTile extends StatelessWidget {
+  final IconData icon;
+  final String name, unit;
+  final int quantity;
+  final Color dotColor;
+
+  const _InventoryTile({
+    required this.icon,
+    required this.name,
+    required this.quantity,
+    required this.unit,
+    required this.dotColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20, color: _teal),
+              const Spacer(),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: dotColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Text(
+            quantity == 0
+                ? '0 Available'
+                : '$quantity ${unit.isNotEmpty ? unit : 'Units'}',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: _tealDark,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(name, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RATING SUMMARY CARD
+// ─────────────────────────────────────────────────────────────────────────────
+class _RatingSummaryCard extends StatelessWidget {
+  final double avgRating;
+  final int reviewCount;
+  final String summary;
+  const _RatingSummaryCard({
+    required this.avgRating,
+    required this.reviewCount,
+    required this.summary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.stars_rounded,
+                color: Color(0xFFF59E0B),
+                size: 26,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                avgRating.toStringAsFixed(1),
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: _tealDark,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '($reviewCount reviews)',
+                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              ),
+            ],
+          ),
+          const Divider(height: 20, color: Color(0xFFF1F5F9)),
+          const Text(
+            'PATIENT FEEDBACK SUMMARY',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              color: _teal,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '"$summary"',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey[700],
+              fontStyle: FontStyle.italic,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

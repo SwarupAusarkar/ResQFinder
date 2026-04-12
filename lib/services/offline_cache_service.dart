@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
@@ -15,48 +16,69 @@ class OfflineCacheService {
     final user = AuthService().currentUser;
     if (user == null) throw Exception("Must be logged in to save trips.");
 
-    // 1. CACHE FIRESTORE PROVIDERS (Auto-caches to local Firebase DB)
-    double latDelta = radiusKm / 111.0; 
-    await FirebaseFirestore.instance.collection('providers')
-        .where('verificationStatus', isEqualTo: 'approved')
-        .where('latitude', isGreaterThanOrEqualTo: lat - latDelta)
-        .where('latitude', isLessThanOrEqualTo: lat + latDelta)
-        .get();
+    List<Map<String, dynamic>> providerJsonList = [];
 
-    // 2. CACHE OPENSTREETMAP API HOSPITALS
-    // Fetch live from the API while we still have internet
-    final osmProviders = await LiveDataService.fetchProviders(
-      serviceType: 'hospital',
-      latitude: lat,
-      longitude: lng,
-      radiusInMeters: radiusKm * 1000,
-    );
+    // 1. FETCH AND SERIALIZE FIREBASE PROVIDERS
+    try {
+      double latDelta = radiusKm / 111.0; 
+      
+      // Fetch all approved providers. We filter the coordinates locally in Dart 
+      // below to completely avoid Firebase complex index crashes.
+      final snap = await FirebaseFirestore.instance.collection('providers')
+          .where('verificationStatus', isEqualTo: 'approved')
+          .get();
 
-    // Filter out Firebase providers (we only want to save the OSM ones here)
-    final onlyOsm = osmProviders.where((p) => p.id.startsWith('osm_')).toList();
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        final pLat = (data['latitude'] as num?)?.toDouble() ?? 0.0;
+        final pLng = (data['longitude'] as num?)?.toDouble() ?? 0.0;
+        
+        // Filter by our coordinate bounding box locally
+        if (pLat >= lat - latDelta && pLat <= lat + latDelta && 
+            pLng >= lng - latDelta && pLng <= lng + latDelta) {
+          data['id'] = doc.id;
+          providerJsonList.add(data);
+        }
+      }
+    } catch (e) {
+      debugPrint("Firebase Fetch Failed: $e");
+    }
 
-    // Convert the Provider objects to a JSON string
-    final List<Map<String, dynamic>> providerJsonList = onlyOsm.map((p) => {
-      'id': p.id,
-      'name': p.name,
-      'type': p.type,
-      'phone': p.phone,
-      'address': p.address,
-      'latitude': p.latitude,
-      'longitude': p.longitude,
-      'distance': p.distance,
-      'isAvailable': p.isAvailable,
-      'rating': p.rating,
-      'description': p.description,
-      'inventory': p.inventory, 
-      'noOfApprovedRequests': p.noOfApprovedRequests ?? 0,
-    }).toList();
+    // 2. FETCH AND SERIALIZE OPENSTREETMAP API HOSPITALS
+    try {
+      final osmProviders = await LiveDataService.fetchProviders(
+        serviceType: 'hospital',
+        latitude: lat,
+        longitude: lng,
+        radiusInMeters: radiusKm * 1000,
+      );
 
-    // Save to device storage
+      final onlyOsm = osmProviders.where((p) => p.id.startsWith('osm_')).toList();
+      
+      providerJsonList.addAll(onlyOsm.map((p) => {
+        'id': p.id,
+        'name': p.name,
+        'type': p.type,
+        'phone': p.phone,
+        'address': p.address,
+        'latitude': p.latitude,
+        'longitude': p.longitude,
+        'distance': p.distance,
+        'isAvailable': p.isAvailable,
+        'rating': p.rating,
+        'description': p.description,
+        'inventory': p.inventory, 
+        'noOfApprovedRequests': p.noOfApprovedRequests ?? 0,
+      }));
+    } catch (e) {
+      debugPrint("OSM API Fetch Failed: $e");
+    }
+
+    // 3. SAVE EVERYTHING TO DEVICE STORAGE (Bulletproof local JSON)
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('offline_api_$regionName', jsonEncode(providerJsonList));
 
-    // 3. SAVE METADATA TO USER PROFILE
+    // 4. SAVE METADATA TO USER PROFILE
     final newLocation = {
       'name': regionName,
       'latitude': lat,

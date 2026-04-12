@@ -20,8 +20,7 @@ class ProviderMainScreen extends StatefulWidget {
   State<ProviderMainScreen> createState() => _ProviderMainScreenState();
 }
 
-class _ProviderMainScreenState extends State<ProviderMainScreen>
-    with SingleTickerProviderStateMixin {
+class _ProviderMainScreenState extends State<ProviderMainScreen> with SingleTickerProviderStateMixin {
   late int _currentIndex;
   late PageController _pageController;
   late AnimationController _animationController;
@@ -29,15 +28,7 @@ class _ProviderMainScreenState extends State<ProviderMainScreen>
   final AuthService _authService = AuthService();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   bool _isAvailable = true;
-  final List<Map<String, dynamic>> _screens=providerTabs;
-  void _onTabTap(int index) {
-    setState(() => _currentIndex = index);
 
-    Navigator.pushReplacementNamed(
-      context,
-      providerTabs[index]['path'],
-    );
-  }
   @override
   void initState() {
     super.initState();
@@ -61,7 +52,8 @@ class _ProviderMainScreenState extends State<ProviderMainScreen>
     final uid = _authService.currentUser?.uid;
     if (uid == null) return;
 
-    final doc = await _firestore.collection('users').doc(uid).get();
+    // BUG FIX: Changed 'users' to 'providers'
+    final doc = await _firestore.collection('providers').doc(uid).get();
     if (mounted) {
       setState(() {
         _isAvailable = doc.data()?['isAvailable'] ?? true;
@@ -76,7 +68,8 @@ class _ProviderMainScreenState extends State<ProviderMainScreen>
     setState(() => _isAvailable = value);
 
     try {
-      await _firestore.collection('users').doc(uid).update({
+      // BUG FIX: Changed 'users' to 'providers'
+      await _firestore.collection('providers').doc(uid).update({
         'isAvailable': value,
         'availabilityUpdatedAt': FieldValue.serverTimestamp(),
       });
@@ -86,14 +79,9 @@ class _ProviderMainScreenState extends State<ProviderMainScreen>
           SnackBar(
             content: Row(
               children: [
-                Icon(
-                  value ? Icons.check_circle : Icons.cancel,
-                  color: Colors.white,
-                ),
+                Icon(value ? Icons.check_circle : Icons.cancel, color: Colors.white),
                 const SizedBox(width: 12),
-                Text(
-                  value ? 'You are now available' : 'You are now offline',
-                ),
+                Text(value ? 'You are now available' : 'You are now offline'),
               ],
             ),
             backgroundColor: value ? primaryColor : Colors.grey[600],
@@ -105,18 +93,14 @@ class _ProviderMainScreenState extends State<ProviderMainScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating availability: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error updating availability: $e'), backgroundColor: Colors.red),
         );
-        setState(() => _isAvailable = !value);
+        setState(() => _isAvailable = !value); // rollback on error
       }
     }
   }
 
   void _onNavTap(int index) {
-    // Inventory click
     if (index == 1) {
       _showInventorySheet();
       return;
@@ -133,7 +117,6 @@ class _ProviderMainScreenState extends State<ProviderMainScreen>
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOutCubic,
     );
-
     _animationController.forward(from: 0.0);
   }
 
@@ -148,150 +131,100 @@ class _ProviderMainScreenState extends State<ProviderMainScreen>
     );
   }
 
-  // All pages in order matching providerTabs
   List<Widget> get _pages => const [
-    NewRequestsPage(),       // Index 0: Dashboard
-    MyOffersPage(),          // Index 1: Active Offers
-    SizedBox.shrink(),       // Index 2: Inventory (shows sheet)
-    HistoryPage(),           // Index 3: History
-    ProviderProfileEditScreen(), // Index 4: Profile
+    NewRequestsPage(),       
+    MyOffersPage(),          
+    SizedBox.shrink(),       
+    HistoryPage(),           
+    ProviderProfileEditScreen(), 
   ];
 
   String _getTitle() {
     switch (_currentIndex) {
-      case 0:
-        return 'Dashboard';
-      case 2:
-        return 'History';
-      case 3:
-        return 'Profile';
-      default:
-        return 'Dashboard';
+      case 0: return 'Dashboard';
+      case 2: return 'History';
+      case 3: return 'Profile';
+      default: return 'Dashboard';
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      // Handle back button - go to first tab (Dashboard)
-      onWillPop: () async {
-        if (_currentIndex != 0) {
+    // BUG FIX: Upgraded WillPopScope to PopScope
+    return PopScope(
+      canPop: _currentIndex == 0,
+      onPopInvoked: (didPop) {
+        if (!didPop && _currentIndex != 0) {
           _onNavTap(0);
-          return false;
         }
-        return true;
       },
       child: Scaffold(
-
-        appBar: _currentIndex != 4 // Hide AppBar on Profile screen
+        appBar: _currentIndex != 4 
             ? AppBar(
-          title: Text(
-            _getTitle(),
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-            ),
-          ),
-
-          centerTitle: false,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0.5,
-          actions: [
-            // Availability Toggle Badge
-            Container(
-              margin: const EdgeInsets.only(right: 12),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 6,
-              ),
-              decoration: BoxDecoration(
-                color: _isAvailable
-                    ? primaryColor.withOpacity(0.1)
-                    : Colors.grey[200],
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: _isAvailable ? primaryColor : Colors.grey[400]!,
-                  width: 1.5,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Status Dot
+                title: Text(_getTitle(), style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                centerTitle: false,
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                elevation: 0.5,
+                actions: [
                   Container(
-                    width: 8,
-                    height: 8,
+                    margin: const EdgeInsets.only(right: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: _isAvailable ? Colors.green : Colors.grey,
-                      shape: BoxShape.circle,
-                      boxShadow: _isAvailable
-                          ? [
-                        BoxShadow(
-                          color: Colors.green.withOpacity(0.5),
-                          blurRadius: 4,
-                          spreadRadius: 1,
+                      color: _isAvailable ? primaryColor.withOpacity(0.1) : Colors.grey[200],
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: _isAvailable ? primaryColor : Colors.grey[400]!, width: 1.5),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8, height: 8,
+                          decoration: BoxDecoration(
+                            color: _isAvailable ? Colors.green : Colors.grey,
+                            shape: BoxShape.circle,
+                            boxShadow: _isAvailable ? [BoxShadow(color: Colors.green.withOpacity(0.5), blurRadius: 4, spreadRadius: 1)] : null,
+                          ),
                         ),
-                      ]
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  // Status Text
-                  Text(
-                    _isAvailable ? 'Available' : 'Offline',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: _isAvailable ? primaryColor : Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  // Toggle Switch
-                  SizedBox(
-                    height: 20,
-                    width: 36,
-                    child: Switch(
-                      value: _isAvailable,
-                      onChanged: _toggleAvailability,
-                      activeColor: primaryColor,
-                      activeTrackColor: primaryColor.withOpacity(0.3),
-                      inactiveThumbColor: Colors.grey[400],
-                      inactiveTrackColor: Colors.grey[300],
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        const SizedBox(width: 6),
+                        Text(
+                          _isAvailable ? 'Available' : 'Offline',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _isAvailable ? primaryColor : Colors.grey[600]),
+                        ),
+                        const SizedBox(width: 4),
+                        SizedBox(
+                          height: 20, width: 36,
+                          child: Switch(
+                            value: _isAvailable,
+                            onChanged: _toggleAvailability,
+                            activeColor: primaryColor,
+                            activeTrackColor: primaryColor.withOpacity(0.3),
+                            inactiveThumbColor: Colors.grey[400],
+                            inactiveTrackColor: Colors.grey[300],
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            ),
-          ],
-        )
+              )
             : null,
-
-        // PageView with smooth transitions
         body: PageView.builder(
           controller: _pageController,
-          physics: const NeverScrollableScrollPhysics(), // Only navigate via tabs
+          physics: const NeverScrollableScrollPhysics(),
           onPageChanged: (index) {
-            // Skip inventory index
             if (index == 2) return;
-
-            setState(() {
-              _currentIndex = index;
-            });
+            setState(() => _currentIndex = index);
           },
           itemCount: _pages.length,
           itemBuilder: (context, index) {
             return FadeTransition(
-              opacity: _animationController.drive(
-                CurveTween(curve: Curves.easeInOut),
-              ),
+              opacity: _animationController.drive(CurveTween(curve: Curves.easeInOut)),
               child: _pages[index],
             );
           },
         ),
-
-        // Bottom Navigation Bar
         bottomNavigationBar: CustomBottomNavBar(
           currentIndex: _currentIndex,
           onTap: _onNavTap,

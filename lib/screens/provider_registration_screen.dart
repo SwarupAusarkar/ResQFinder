@@ -19,8 +19,7 @@ class ProviderRegistrationScreen extends StatefulWidget {
       _ProviderRegistrationScreenState();
 }
 
-class _ProviderRegistrationScreenState
-    extends State<ProviderRegistrationScreen> {
+class _ProviderRegistrationScreenState extends State<ProviderRegistrationScreen> {
 
   // ── Services ─────────────────────────────────────────────────────────────────
   final _formKey     = GlobalKey<FormState>();
@@ -28,22 +27,20 @@ class _ProviderRegistrationScreenState
   final _picker      = ImagePicker();
   final _firestore   = FirebaseFirestore.instance;
 
-  // ── Controllers ──────────────────────────────────────────────────────────────
+  // ── Controllers (HFR & NMC Removed) ─────────────────────────
   final _nameController        = TextEditingController();
   final _phoneController       = TextEditingController();
   final _emailController       = TextEditingController();
   final _passwordController    = TextEditingController();
-  final _addressController     = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _addressController     = TextEditingController();
   final _latController         = TextEditingController();
   final _lonController         = TextEditingController();
-  final _nmcIdController       = TextEditingController();
-  final _hfrIdController       = TextEditingController();
 
   // ── State ────────────────────────────────────────────────────────────────────
   String _selectedType  = 'Multi-Speciality Hospital';
-  bool   _isLoading     = true;   // loading pre-existing data
-  bool   _isSaving      = false;  // registration in progress
+  bool   _isLoading     = true;   
+  bool   _isSaving      = false;  
 
   // Loaded from Firestore
   double        _avgRating           = 0.0;
@@ -52,16 +49,15 @@ class _ProviderRegistrationScreenState
   bool          _isHFRVerified       = false;
   bool          _isNMCVerified       = false;
   bool          _profileComplete     = false;
+  
+  File?         _certificateImage;
   String?       _existingCertUrl;
+  
+  final List<File> _facilityImages = [];
   List<String>  _existingFacilityUrls = [];
   List<Map<String, dynamic>> _inventoryItems = [];
 
-  // New files this session
-  File?       _certificateImage;
-  List<File>  _facilityImages = [];
-
-  final List<String> _facilityTypes =
-  masterInventoryList.map((e) => e.name).toList();
+  final List<String> _facilityTypes = masterInventoryList.map((e) => e.name).toList();
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────────
   @override
@@ -75,12 +71,12 @@ class _ProviderRegistrationScreenState
     for (final c in [
       _nameController, _phoneController, _emailController,
       _passwordController, _addressController, _descriptionController,
-      _latController, _lonController, _nmcIdController, _hfrIdController
+      _latController, _lonController
     ]) { c.dispose(); }
     super.dispose();
   }
 
-  // ── NEW: load data from Firestore ─────────────────────────────────────────────
+  // ── load data from Firestore ─────────────────────────────────────────────
   Future<void> _loadExistingData() async {
     final user = _authService.currentUser;
     if (user == null) { setState(() => _isLoading = false); return; }
@@ -90,7 +86,6 @@ class _ProviderRegistrationScreenState
       if (doc.exists && doc.data() != null) {
         final d = doc.data()!;
 
-        // Text fields – exact Firestore field names from screenshots
         _nameController.text        = d['name']        ?? '';
         _phoneController.text       = d['phone']        ?? '';
         _emailController.text       = d['email']        ?? '';
@@ -98,17 +93,13 @@ class _ProviderRegistrationScreenState
         _descriptionController.text = d['description']  ?? '';
         _latController.text         = (d['latitude']  as num?)?.toString() ?? '';
         _lonController.text         = (d['longitude'] as num?)?.toString() ?? '';
-        _nmcIdController.text       = d['nmcId']  ?? '';
-        _hfrIdController.text       = d['hfrId']  ?? '';
 
-        // Facility type
         final pType = (d['providerType'] as String?) ?? '';
         _selectedType = _facilityTypes.firstWhere(
               (t) => t.toLowerCase().contains(pType.toLowerCase()),
           orElse: () => _facilityTypes.first,
         );
 
-        // Read-only stats
         _avgRating       = (d['avgRating']    as num?)?.toDouble() ?? 0.0;
         _reviewCount     = (d['reviewCount']  as int?)             ?? 0;
         _isAvailable     = d['isAvailable']   as bool?             ?? false;
@@ -116,18 +107,13 @@ class _ProviderRegistrationScreenState
         _isNMCVerified   = d['isNMCVerified'] as bool?             ?? false;
         _profileComplete = d['profileComplete'] as bool?           ?? false;
 
-        // Certificate
         final cert = d['certificateUrl'] as String? ?? '';
         _existingCertUrl = cert.isEmpty ? null : cert;
 
-        // Facility photos
-        _existingFacilityUrls =
-        List<String>.from(d['facilityUrls'] ?? []);
+        _existingFacilityUrls = List<String>.from(d['facilityUrls'] ?? []);
 
-        // Inventory array: [{name, quantity, unit, last_updated}, …]
         final rawInv = d['inventory'] as List? ?? [];
-        _inventoryItems =
-            rawInv.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _inventoryItems = rawInv.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       }
     } catch (e) {
       debugPrint('_loadExistingData: $e');
@@ -136,7 +122,7 @@ class _ProviderRegistrationScreenState
     }
   }
 
-  // ── Image helpers (UNCHANGED) ─────────────────────────────────────────────────
+  // ── Image helpers ─────────────────────────────────────────────────────────────
   Future<void> _pickCertificate() async {
     final f = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (f != null) setState(() => _certificateImage = File(f.path));
@@ -149,27 +135,34 @@ class _ProviderRegistrationScreenState
     }
   }
 
-  // ── Registration flow (UNCHANGED) ─────────────────────────────────────────────
+  // ── Registration flow ─────────────────────────────────────────────────────────
   Future<void> _startRegistrationFlow() async {
     if (!_formKey.currentState!.validate()) return;
+    
     if (_latController.text.isEmpty) {
       _showSnackBar('Please capture clinic location first.', Colors.orange); return;
     }
+    
     if (_certificateImage == null && _existingCertUrl == null) {
       _showSnackBar('Upload your Facility Certificate to proceed.', Colors.orange); return;
     }
+    
     final totalPhotos = _existingFacilityUrls.length + _facilityImages.length;
     if (totalPhotos < 5) {
-      _showSnackBar('Minimum 5 facility photos required. Current: $totalPhotos',
-          Colors.red);
+      _showSnackBar('Minimum 5 facility photos required. Current: $totalPhotos', Colors.red);
       return;
     }
+    
     setState(() => _isSaving = true);
+    
     String phone = _phoneController.text.trim();
     if (!phone.startsWith('+')) phone = '+91$phone';
+    phone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    
     try {
       await _authService.startPhoneVerification(
         phoneNumber: phone,
+        isLogin: false,
         onCodeSent: (vId, _) {
           setState(() => _isSaving = false);
           _showOtpDialog(vId, phone);
@@ -193,15 +186,13 @@ class _ProviderRegistrationScreenState
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Verify Phone', style: TextStyle(fontWeight: FontWeight.w800)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Enter the 6-digit code sent to $phone',
-              style: const TextStyle(fontSize: 13)),
+          Text('Enter the 6-digit code sent to $phone', style: const TextStyle(fontSize: 13)),
           const SizedBox(height: 16),
           TextField(
             controller: otpCtrl,
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-                letterSpacing: 8, fontSize: 24, fontWeight: FontWeight.bold),
+            style: const TextStyle(letterSpacing: 8, fontSize: 24, fontWeight: FontWeight.bold),
             decoration: InputDecoration(
               hintText: '000000',
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -223,8 +214,7 @@ class _ProviderRegistrationScreenState
             },
             style: ElevatedButton.styleFrom(
                 backgroundColor: _teal, foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10))),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
             child: const Text('Verify & Register'),
           ),
         ],
@@ -234,29 +224,33 @@ class _ProviderRegistrationScreenState
 
   Future<void> _finalizeRegistration(String vId, String smsCode) async {
     setState(() => _isSaving = true);
+    
+    String phone = _phoneController.text.trim();
+    if (!phone.startsWith('+')) phone = '+91$phone';
+    phone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    
     try {
-      await _authService.registerWithVerifiedPhone(
+      final user = await _authService.registerWithVerifiedPhone(
         email:            _emailController.text.trim(),
         password:         _passwordController.text.trim(),
         verificationId:   vId,
         smsCode:          smsCode,
         fullName:         _nameController.text.trim(),
         userType:         'provider',
-        phone:            _phoneController.text.trim(),
-        address:          _addressController.text.trim(),
-        latitude:         double.parse(_latController.text),
-        longitude:        double.parse(_lonController.text),
-        providerType:     _selectedType,
-        description:      _descriptionController.text.trim(),
-        hfrId:            _hfrIdController.text.trim(),
-        nmcId:            _nmcIdController.text.trim(),
-        certificateImage: _certificateImage,
-
-        facilityImages: _facilityImages, isHFRVerified:true, isNMCVerified: true,
-
-
+        phone:            phone,
       );
-      if (mounted) Navigator.pushReplacementNamed(context, '/provider_guard');
+
+      if (user != null) {
+        // HFR and NMC have been removed from this initial setup
+        await _firestore.collection('providers').doc(user.uid).update({
+          'address': _addressController.text.trim(),
+          'latitude': double.tryParse(_latController.text) ?? 0.0,
+          'longitude': double.tryParse(_lonController.text) ?? 0.0,
+          'providerType': _selectedType,
+          'profileComplete': true, 
+        });
+      }
+
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -313,8 +307,6 @@ class _ProviderRegistrationScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
-                    // Status banner if existing record found
                     if (hasExistingData) ...[
                       _ProfileStatusBanner(
                         avgRating:     _avgRating,
@@ -358,8 +350,7 @@ class _ProviderRegistrationScreenState
                     _StepCard(
                       stepNumber: '3',
                       title: 'Services & Inventory',
-                      child: _ServicesInventoryStep(
-                          inventoryItems: _inventoryItems),
+                      child: _ServicesInventoryStep(inventoryItems: _inventoryItems),
                     ),
                     const SizedBox(height: 16),
 
@@ -378,13 +369,10 @@ class _ProviderRegistrationScreenState
                     _AuthFieldsSection(
                       emailController:    _emailController,
                       passwordController: _passwordController,
-                      nmcIdController:    _nmcIdController,
-                      hfrIdController:    _hfrIdController,
                     ),
                     const SizedBox(height: 28),
 
-                    _SubmitButton(
-                        isLoading: _isSaving, onTap: _startRegistrationFlow),
+                    _SubmitButton(isLoading: _isSaving, onTap: _startRegistrationFlow),
                   ],
                 ),
               ),
@@ -407,18 +395,14 @@ class _RegSliverAppBar extends StatelessWidget {
     return SliverAppBar(
       pinned: true, backgroundColor: _tealDark, elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded,
-            color: Colors.white, size: 18),
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
         onPressed: () => Navigator.pop(context),
       ),
-      title: const Text('Provider Registration',
-          style: TextStyle(color: Colors.white, fontSize: 16,
-              fontWeight: FontWeight.w700)),
+      title: const Text('Provider Registration', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
     );
   }
 }
 
-// ── Profile status banner ─────────────────────────────────────────────────────
 class _ProfileStatusBanner extends StatelessWidget {
   final double avgRating;
   final int    reviewCount;
@@ -438,13 +422,10 @@ class _ProfileStatusBanner extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [BoxShadow(
-            color: Colors.black.withOpacity(0.04), blurRadius: 10)],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('CURRENT PROFILE STATUS',
-            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800,
-                color: Color(0xFF94A3B8), letterSpacing: 1.5)),
+        const Text('CURRENT PROFILE STATUS', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1.5)),
         const SizedBox(height: 12),
         Row(children: [
           _StatusPill(
@@ -470,12 +451,9 @@ class _ProfileStatusBanner extends StatelessWidget {
           Row(children: [
             const Icon(Icons.star_rounded, size: 16, color: Color(0xFFF59E0B)),
             const SizedBox(width: 4),
-            Text(avgRating.toStringAsFixed(1),
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
-                    color: _tealDark)),
+            Text(avgRating.toStringAsFixed(1), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _tealDark)),
             const SizedBox(width: 6),
-            Text('($reviewCount reviews)',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+            Text('($reviewCount reviews)', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
           ]),
         ],
       ]),
@@ -490,17 +468,14 @@ class _StatusPill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
     decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-    child: Text(label,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+    child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
   );
 }
 
-// ── Generic step card ─────────────────────────────────────────────────────────
 class _StepCard extends StatelessWidget {
   final String stepNumber, title;
   final Widget child;
-  const _StepCard(
-      {required this.stepNumber, required this.title, required this.child});
+  const _StepCard({required this.stepNumber, required this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -508,27 +483,20 @@ class _StepCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(
-            color: Colors.black.withOpacity(0.04), blurRadius: 10)],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-          decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
+          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
           child: Row(children: [
             Container(
               width: 26, height: 26,
-              decoration:
-              const BoxDecoration(color: _tealDark, shape: BoxShape.circle),
-              child: Center(child: Text(stepNumber,
-                  style: const TextStyle(fontSize: 12,
-                      fontWeight: FontWeight.w800, color: Colors.white))),
+              decoration: const BoxDecoration(color: _tealDark, shape: BoxShape.circle),
+              child: Center(child: Text(stepNumber, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white))),
             ),
             const SizedBox(width: 10),
-            Text(title,
-                style: const TextStyle(fontSize: 15,
-                    fontWeight: FontWeight.w800, color: _tealDark)),
+            Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _tealDark)),
           ]),
         ),
         Padding(padding: const EdgeInsets.all(16), child: child),
@@ -537,7 +505,6 @@ class _StepCard extends StatelessWidget {
   }
 }
 
-// ── Step 1 ────────────────────────────────────────────────────────────────────
 class _FacilityIdentityStep extends StatelessWidget {
   final TextEditingController nameController, phoneController, addressController;
   final String selectedType;
@@ -554,33 +521,24 @@ class _FacilityIdentityStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(children: [
-    _RegField(controller: nameController, label: 'FACILITY NAME',
-        hint: 'Shanti Hospital',
-        validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
+    _RegField(controller: nameController, label: 'FACILITY NAME', hint: 'Shanti Hospital', validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
     const SizedBox(height: 12),
-    _FacilityTypeDropdown(
-        selected: selectedType, types: facilityTypes,
-        onChanged: onTypeChanged),
+    _FacilityTypeDropdown(selected: selectedType, types: facilityTypes, onChanged: onTypeChanged),
     const SizedBox(height: 12),
     _PhoneField(controller: phoneController),
     const SizedBox(height: 12),
-    _RegField(controller: addressController, label: 'FACILITY ADDRESS',
-        hint: 'Sector 19A, Airoli, Navi Mumbai 400708', maxLines: 2,
-        validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
+    _RegField(controller: addressController, label: 'FACILITY ADDRESS', hint: 'Sector 19A, Airoli, Navi Mumbai 400708', maxLines: 2, validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
     const SizedBox(height: 4),
     Align(
       alignment: Alignment.centerRight,
       child: GestureDetector(
         onTap: onUseCurrentLocation,
-        child: const Text('☉ Use Current Location',
-            style: TextStyle(fontSize: 12, color: _teal,
-                fontWeight: FontWeight.w600)),
+        child: const Text('☉ Use Current Location', style: TextStyle(fontSize: 12, color: _teal, fontWeight: FontWeight.w600)),
       ),
     ),
   ]);
 }
 
-// ── Step 2 ────────────────────────────────────────────────────────────────────
 class _VerificationDocumentsStep extends StatelessWidget {
   final File?        certificateImage;
   final String?      existingCertUrl;
@@ -600,30 +558,17 @@ class _VerificationDocumentsStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // Notice
       Container(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-            color: const Color(0xFFFFF7ED),
-            borderRadius: BorderRadius.circular(10)),
-        child: const Row(crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.verified_user_rounded, size: 14,
-                  color: Color(0xFFEA580C)),
-              SizedBox(width: 8),
-              Expanded(child: Text(
-                  'We verify all providers within 24 hours to maintain the '
-                      'integrity of emergency services.',
-                  style: TextStyle(fontSize: 11, color: Color(0xFF92400E),
-                      height: 1.4))),
-            ]),
+        decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10)),
+        child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.verified_user_rounded, size: 14, color: Color(0xFFEA580C)),
+          SizedBox(width: 8),
+          Expanded(child: Text('We verify all providers within 24 hours to maintain the integrity of emergency services.', style: TextStyle(fontSize: 11, color: Color(0xFF92400E), height: 1.4))),
+        ]),
       ),
       const SizedBox(height: 14),
-
-      // Certificate upload
-      const Text('Medical Registration Certificate',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-              color: _tealDark)),
+      const Text('Medical Registration Certificate', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _tealDark)),
       const SizedBox(height: 8),
       GestureDetector(
         onTap: onPickCertificate,
@@ -633,79 +578,42 @@ class _VerificationDocumentsStep extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: _hasCert ? _teal : const Color(0xFFE2E8F0),
-                width: 1.5),
+            border: Border.all(color: _hasCert ? _teal : const Color(0xFFE2E8F0), width: 1.5),
           ),
           child: Column(children: [
-            Icon(
-              _hasCert
-                  ? Icons.check_circle_rounded
-                  : Icons.upload_file_rounded,
-              size: 32,
-              color: _hasCert ? _teal : Colors.grey[400],
-            ),
+            Icon(_hasCert ? Icons.check_circle_rounded : Icons.upload_file_rounded, size: 32, color: _hasCert ? _teal : Colors.grey[400]),
             const SizedBox(height: 6),
             Text(
-              certificateImage != null
-                  ? certificateImage!.path.split('/').last
-                  : (existingCertUrl != null
-                  ? 'Certificate uploaded ✓'
-                  : 'Click to upload PDF or Image'),
+              certificateImage != null ? certificateImage!.path.split('/').last : (existingCertUrl != null ? 'Certificate uploaded ✓' : 'Click to upload PDF or Image'),
               style: TextStyle(fontSize: 12, color: Colors.grey[500]),
             ),
-            if (!_hasCert)
-              Text('Maximum file size: 5MB',
-                  style: TextStyle(fontSize: 10, color: Colors.grey[400])),
+            if (!_hasCert) Text('Maximum file size: 5MB', style: TextStyle(fontSize: 10, color: Colors.grey[400])),
           ]),
         ),
       ),
       const SizedBox(height: 14),
-
-      // Facility photos
       Row(children: [
-        const Text('Facility Photos (Exterior & Wards)',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-                color: _tealDark)),
+        const Text('Facility Photos (Exterior & Wards)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _tealDark)),
         const Spacer(),
-        Text('$_photoCount/5',
-            style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w700,
-                color: _photoCount >= 5
-                    ? _teal : const Color(0xFFDC2626))),
+        Text('$_photoCount/5', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _photoCount >= 5 ? _teal : const Color(0xFFDC2626))),
       ]),
       const SizedBox(height: 4),
-      Text('Minimum 5 photos required',
-          style: TextStyle(fontSize: 10, color: Colors.grey[400])),
+      Text('Minimum 5 photos required', style: TextStyle(fontSize: 10, color: Colors.grey[400])),
       const SizedBox(height: 8),
       Wrap(spacing: 8, runSpacing: 8, children: [
-        // Existing network images from Firestore
         ...existingFacilityUrls.map((url) => ClipRRect(
           borderRadius: BorderRadius.circular(10),
-          child: Image.network(url, width: 64, height: 64, fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                width: 64, height: 64,
-                decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF9),
-                    borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.broken_image_rounded, color: _teal),
-              )),
+          child: Image.network(url, width: 64, height: 64, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: 64, height: 64, decoration: BoxDecoration(color: const Color(0xFFF0FDF9), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.broken_image_rounded, color: _teal))),
         )),
-        // Newly selected local images
         ...facilityImages.map((file) => ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: Image.file(file, width: 64, height: 64, fit: BoxFit.cover),
         )),
-        // Add button
         GestureDetector(
           onTap: onPickFacilityImages,
           child: Container(
             width: 64, height: 64,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-            ),
+            decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5)),
             child: const Icon(Icons.add_rounded, color: _teal, size: 24),
           ),
         ),
@@ -714,7 +622,6 @@ class _VerificationDocumentsStep extends StatelessWidget {
   }
 }
 
-// ── Step 3 ────────────────────────────────────────────────────────────────────
 class _ServicesInventoryStep extends StatelessWidget {
   final List<Map<String, dynamic>> inventoryItems;
   const _ServicesInventoryStep({required this.inventoryItems});
@@ -761,8 +668,7 @@ class _ServicesInventoryStep extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: _InventoryRow(
-            icon: _icon(name), label: name,
-            unit: unit.isNotEmpty ? unit : 'Total Available',
+            icon: _icon(name), label: name, unit: unit.isNotEmpty ? unit : 'Total Available',
             quantity: qty, iconColor: _fg(name), iconBg: _bg(name),
           ),
         );
@@ -771,28 +677,19 @@ class _ServicesInventoryStep extends StatelessWidget {
       Wrap(spacing: 8, runSpacing: 8, children: [
         ...['Ventilator', 'Oxygen', 'Ambulance'].map((s) => Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-              borderRadius: BorderRadius.circular(20)),
-          child: Text('+ $s',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(20)),
+          child: Text('+ $s', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
         )),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-              border: Border.all(color: _teal),
-              borderRadius: BorderRadius.circular(20),
-              color: const Color(0xFFEFF6F5)),
-          child: const Text('+ Add Service',
-              style: TextStyle(fontSize: 12, color: _teal,
-                  fontWeight: FontWeight.w600)),
+          decoration: BoxDecoration(border: Border.all(color: _teal), borderRadius: BorderRadius.circular(20), color: const Color(0xFFEFF6F5)),
+          child: const Text('+ Add Service', style: TextStyle(fontSize: 12, color: _teal, fontWeight: FontWeight.w600)),
         ),
       ]),
     ]);
   }
 }
 
-// ── Step 4 ────────────────────────────────────────────────────────────────────
 class _GpsSyncStep extends StatelessWidget {
   final TextEditingController latController, lonController;
   final bool isLoading;
@@ -808,62 +705,38 @@ class _GpsSyncStep extends StatelessWidget {
     return Column(children: [
       Container(
         height: 100,
-        decoration: BoxDecoration(
-            color: const Color(0xFFEFF6F5),
-            borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(color: const Color(0xFFEFF6F5), borderRadius: BorderRadius.circular(12)),
         child: Stack(alignment: Alignment.center, children: [
           GridView.builder(
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate:
-            const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 6),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 6),
             itemCount: 36,
-            itemBuilder: (_, __) => Container(
-                decoration: BoxDecoration(
-                    border: Border.all(
-                        color: const Color(0xFFD1FAE5), width: 0.5))),
+            itemBuilder: (_, __) => Container(decoration: BoxDecoration(border: Border.all(color: const Color(0xFFD1FAE5), width: 0.5))),
           ),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white, borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(
-                  color: Colors.black.withOpacity(0.08), blurRadius: 8)],
-            ),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8)]),
             child: const Icon(Icons.location_pin, size: 32, color: _teal),
           ),
         ]),
       ),
       const SizedBox(height: 14),
       Row(children: [
-        Expanded(child: _CoordDisplay(
-          label: 'LATITUDE',
-          value: latController.text.isEmpty ? '—' : latController.text,
-        )),
-        Expanded(child: _CoordDisplay(
-          label: 'LONGITUDE',
-          value: lonController.text.isEmpty ? '—' : lonController.text,
-        )),
+        Expanded(child: _CoordDisplay(label: 'LATITUDE', value: latController.text.isEmpty ? '—' : latController.text)),
+        Expanded(child: _CoordDisplay(label: 'LONGITUDE', value: lonController.text.isEmpty ? '—' : lonController.text)),
       ]),
       const SizedBox(height: 12),
       GestureDetector(
         onTap: onSync,
         child: Container(
           width: double.infinity, height: 44,
-          decoration: BoxDecoration(
-            color: const Color(0xFFEFF6F5),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _teal.withOpacity(0.3)),
-          ),
+          decoration: BoxDecoration(color: const Color(0xFFEFF6F5), borderRadius: BorderRadius.circular(12), border: Border.all(color: _teal.withOpacity(0.3))),
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             isLoading
-                ? const SizedBox(width: 14, height: 14,
-                child: CircularProgressIndicator(
-                    color: _teal, strokeWidth: 2))
+                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: _teal, strokeWidth: 2))
                 : const Icon(Icons.sync_rounded, color: _teal, size: 16),
             const SizedBox(width: 8),
-            const Text('Sync GPS Position',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-                    color: _teal)),
+            const Text('Sync GPS Position', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _teal)),
           ]),
         ),
       ),
@@ -875,68 +748,39 @@ class _CoordDisplay extends StatelessWidget {
   final String label, value;
   const _CoordDisplay({required this.label, required this.value});
   @override
-  Widget build(BuildContext context) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label,
-            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800,
-                color: Color(0xFF94A3B8), letterSpacing: 1)),
-        const SizedBox(height: 2),
-        Text(value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-                color: _tealDark)),
-      ]);
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1)),
+    const SizedBox(height: 2),
+    Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _tealDark)),
+  ]);
 }
 
-// ── Auth credentials card ─────────────────────────────────────────────────────
 class _AuthFieldsSection extends StatelessWidget {
-  final TextEditingController emailController, passwordController,
-      nmcIdController, hfrIdController;
+  final TextEditingController emailController, passwordController;
 
   const _AuthFieldsSection({
     required this.emailController, required this.passwordController,
-    required this.nmcIdController, required this.hfrIdController,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(
-            color: Colors.black.withOpacity(0.04), blurRadius: 10)],
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Row(children: [
           Icon(Icons.lock_rounded, size: 16, color: _teal),
           SizedBox(width: 8),
-          Text('Account Credentials',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800,
-                  color: _tealDark)),
+          Text('Account Credentials', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _tealDark)),
         ]),
         const SizedBox(height: 14),
-        _RegField(controller: emailController, label: 'OFFICIAL EMAIL',
-            hint: 'hospital@example.com',
-            keyboardType: TextInputType.emailAddress,
-            validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
+        _RegField(controller: emailController, label: 'OFFICIAL EMAIL', hint: 'hospital@example.com', keyboardType: TextInputType.emailAddress, validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
         const SizedBox(height: 12),
-        _RegField(controller: passwordController, label: 'PASSWORD',
-            hint: 'Minimum 8 characters', isPassword: true,
-            validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
-        const SizedBox(height: 12),
-        _RegField(controller: nmcIdController, label: 'NMC DOCTOR ID',
-            hint: 'NMC-XXXXXXXX',
-            validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
-        const SizedBox(height: 12),
-        _RegField(controller: hfrIdController, label: 'HFR FACILITY ID',
-            hint: 'HFR-XXXXXXXX',
-            validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
+        _RegField(controller: passwordController, label: 'PASSWORD', hint: 'Minimum 8 characters', isPassword: true, validator: (v) => v?.isEmpty ?? true ? 'Required' : null),
       ]),
     );
   }
 }
-
-// ── Primitive / reusable widgets ──────────────────────────────────────────────
 
 class _RegField extends StatelessWidget {
   final TextEditingController controller;
@@ -953,34 +797,19 @@ class _RegField extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label,
-            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800,
-                color: Color(0xFF94A3B8), letterSpacing: 1.2)),
-        const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: TextFormField(
-            controller: controller, keyboardType: keyboardType,
-            maxLines: maxLines, obscureText: isPassword,
-            style: const TextStyle(fontSize: 14, color: _tealDark),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: const TextStyle(
-                  color: Color(0xFFCBD5E1), fontSize: 13),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 13),
-            ),
-            validator: validator,
-          ),
-        ),
-      ]);
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+    const SizedBox(height: 6),
+    Container(
+      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: TextFormField(
+        controller: controller, keyboardType: keyboardType, maxLines: maxLines, obscureText: isPassword,
+        style: const TextStyle(fontSize: 14, color: _tealDark),
+        decoration: InputDecoration(hintText: hint, hintStyle: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13), border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13)),
+        validator: validator,
+      ),
+    ),
+  ]);
 }
 
 class _PhoneField extends StatelessWidget {
@@ -988,128 +817,72 @@ class _PhoneField extends StatelessWidget {
   const _PhoneField({required this.controller});
 
   @override
-  Widget build(BuildContext context) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('CONTACT NUMBER',
-            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800,
-                color: Color(0xFF94A3B8), letterSpacing: 1.2)),
-        const SizedBox(height: 6),
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    const Text('CONTACT NUMBER', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+    const SizedBox(height: 6),
+    Container(
+      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: Row(children: [
         Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: Row(children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-              decoration: const BoxDecoration(
-                  border: Border(right: BorderSide(
-                      color: Color(0xFFE2E8F0)))),
-              child: const Text('+91',
-                  style: TextStyle(fontSize: 14,
-                      fontWeight: FontWeight.w600, color: _tealDark)),
-            ),
-            Expanded(
-              child: TextFormField(
-                controller: controller,
-                keyboardType: TextInputType.phone,
-                style: const TextStyle(fontSize: 14, color: _tealDark),
-                decoration: const InputDecoration(
-                  hintText: '99999 99999',
-                  hintStyle: TextStyle(
-                      color: Color(0xFFCBD5E1), fontSize: 13),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 13),
-                ),
-                validator: (v) =>
-                v?.isEmpty ?? true ? 'Required' : null,
-              ),
-            ),
-          ]),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+          decoration: const BoxDecoration(border: Border(right: BorderSide(color: Color(0xFFE2E8F0)))),
+          child: const Text('+91', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _tealDark)),
         ),
-      ]);
+        Expanded(
+          child: TextFormField(
+            controller: controller, keyboardType: TextInputType.phone,
+            style: const TextStyle(fontSize: 14, color: _tealDark),
+            decoration: const InputDecoration(hintText: '99999 99999', hintStyle: TextStyle(color: Color(0xFFCBD5E1), fontSize: 13), border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 13)),
+            validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+          ),
+        ),
+      ]),
+    ),
+  ]);
 }
 
 class _FacilityTypeDropdown extends StatelessWidget {
   final String selected;
   final List<String> types;
   final void Function(String?) onChanged;
-  const _FacilityTypeDropdown(
-      {required this.selected, required this.types, required this.onChanged});
+  const _FacilityTypeDropdown({required this.selected, required this.types, required this.onChanged});
 
   @override
-  Widget build(BuildContext context) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('FACILITY TYPE',
-            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800,
-                color: Color(0xFF94A3B8), letterSpacing: 1.2)),
-        const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: DropdownButtonFormField<String>(
-            value: selected, isExpanded: true,
-            decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 4)),
-            style: const TextStyle(fontSize: 14, color: _tealDark),
-            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _teal),
-            dropdownColor: Colors.white,
-            items: types
-                .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                .toList(),
-            onChanged: onChanged,
-          ),
-        ),
-      ]);
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    const Text('FACILITY TYPE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+    const SizedBox(height: 6),
+    Container(
+      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: DropdownButtonFormField<String>(
+        value: selected, isExpanded: true,
+        decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 4)),
+        style: const TextStyle(fontSize: 14, color: _tealDark),
+        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _teal),
+        dropdownColor: Colors.white,
+        items: types.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+        onChanged: onChanged,
+      ),
+    ),
+  ]);
 }
 
 class _InventoryRow extends StatelessWidget {
-  final IconData icon;
-  final String label, unit;
-  final int quantity;
-  final Color iconColor, iconBg;
-
-  const _InventoryRow({
-    required this.icon, required this.label, required this.unit,
-    required this.quantity, required this.iconColor, required this.iconBg,
-  });
+  final IconData icon; final String label, unit; final int quantity; final Color iconColor, iconBg;
+  const _InventoryRow({required this.icon, required this.label, required this.unit, required this.quantity, required this.iconColor, required this.iconBg});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
       child: Row(children: [
-        Container(
-          width: 36, height: 36,
-          decoration: BoxDecoration(
-              color: iconBg, borderRadius: BorderRadius.circular(10)),
-          child: Icon(icon, size: 18, color: iconColor),
-        ),
+        Container(width: 36, height: 36, decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)), child: Icon(icon, size: 18, color: iconColor)),
         const SizedBox(width: 10),
-        Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600, color: _tealDark)),
-              Text(unit, style: TextStyle(fontSize: 11, color: Colors.grey[400])),
-            ])),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _tealDark)), Text(unit, style: TextStyle(fontSize: 11, color: Colors.grey[400]))])),
         Row(children: [
           _QtyBtn(icon: Icons.remove_rounded, onTap: () {}),
           const SizedBox(width: 10),
-          Text('$quantity', style: const TextStyle(
-              fontSize: 16, fontWeight: FontWeight.w700, color: _tealDark)),
+          Text('$quantity', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _tealDark)),
           const SizedBox(width: 10),
           _QtyBtn(icon: Icons.add_rounded, onTap: () {}, isAdd: true),
         ]),
@@ -1119,9 +892,7 @@ class _InventoryRow extends StatelessWidget {
 }
 
 class _QtyBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool isAdd;
+  final IconData icon; final VoidCallback onTap; final bool isAdd;
   const _QtyBtn({required this.icon, required this.onTap, this.isAdd = false});
 
   @override
@@ -1129,19 +900,14 @@ class _QtyBtn extends StatelessWidget {
     onTap: onTap,
     child: Container(
       width: 28, height: 28,
-      decoration: BoxDecoration(
-        color: isAdd ? _teal : const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Icon(icon, size: 16,
-          color: isAdd ? Colors.white : Colors.grey[600]),
+      decoration: BoxDecoration(color: isAdd ? _teal : const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+      child: Icon(icon, size: 16, color: isAdd ? Colors.white : Colors.grey[600]),
     ),
   );
 }
 
 class _SubmitButton extends StatelessWidget {
-  final bool isLoading;
-  final VoidCallback onTap;
+  final bool isLoading; final VoidCallback onTap;
   const _SubmitButton({required this.isLoading, required this.onTap});
 
   @override
@@ -1149,27 +915,8 @@ class _SubmitButton extends StatelessWidget {
     onTap: isLoading ? null : onTap,
     child: Container(
       width: double.infinity, height: 54,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-            colors: [_tealDark, _teal],
-            begin: Alignment.centerLeft, end: Alignment.centerRight),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(
-            color: _teal.withOpacity(0.35), blurRadius: 16,
-            offset: const Offset(0, 6))],
-      ),
-      child: Center(child: isLoading
-          ? const SizedBox(width: 22, height: 22,
-          child: CircularProgressIndicator(
-              color: Colors.white, strokeWidth: 2))
-          : const Row(mainAxisSize: MainAxisSize.min, children: [
-        Text('Submit for Verification',
-            style: TextStyle(fontSize: 15,
-                fontWeight: FontWeight.w700, color: Colors.white)),
-        SizedBox(width: 8),
-        Icon(Icons.arrow_forward_rounded,
-            color: Colors.white, size: 18),
-      ])),
+      decoration: BoxDecoration(gradient: const LinearGradient(colors: [_tealDark, _teal], begin: Alignment.centerLeft, end: Alignment.centerRight), borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: _teal.withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 6))]),
+      child: Center(child: isLoading ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Row(mainAxisSize: MainAxisSize.min, children: [Text('Submit for Verification', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)), SizedBox(width: 8), Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18)])),
     ),
   );
 }
