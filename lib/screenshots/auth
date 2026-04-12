@@ -1,0 +1,19 @@
+// UI dynamically listens to the Firestore websocket stream
+  StreamBuilder<QuerySnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('service_requests')
+        .where('requesterId', isEqualTo: FirebaseAuth.instance.currentUser!.uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots(), // Establishes the real-time connection
+    builder: (context, snapshot) {
+      if (!snapshot.hasData) return const CircularProgressIndicator();
+      
+      final requests = snapshot.data!.docs;
+      // UI automatically rebuilds the moment the provider changes the status 
+      // from 'pending' to 'accepted' or 'en_route'
+      return ListView.builder(
+        itemCount: requests.length,
+        itemBuilder: (context, index) => RequestTrackingCard(request: requests[index]),
+      );
+    },
+  )

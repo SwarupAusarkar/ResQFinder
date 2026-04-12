@@ -1,6 +1,9 @@
 // lib/screens/requester_profile_screen.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_contacts_service/flutter_contacts_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/requester_model.dart';
@@ -30,6 +33,7 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _medicalController = TextEditingController();
 
+  String? _profileImageUrl;
   String _selectedBloodType = 'Unknown';
   List<EmergencyContact> _emergencyChecklist = [];
   bool _isLoading = true;
@@ -64,6 +68,8 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
           _phoneController.text = data['phone'] ?? '';
           _medicalController.text = data['medicalNotes'] ?? '';
           _sendSmsPermission = data['sendSmsPermission'] ?? false;
+          _profileImageUrl = data['profileImageUrl'] as String?;
+          
           String bType = data['bloodGrp'] ?? 'Unknown';
           _selectedBloodType = _bloodTypes.contains(bType) ? bType : 'Unknown';
 
@@ -81,6 +87,38 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
       debugPrint("Error loading profile data: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _updateProfilePicture() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (pickedFile == null) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final user = AuthService().currentUser;
+      if (user == null) return;
+
+      final file = File(pickedFile.path);
+      final ref = FirebaseStorage.instance.ref().child('profile_pictures/requesters/${user.uid}.jpg');
+      await ref.putFile(file);
+      final url = await ref.getDownloadURL();
+
+      await FirebaseFirestore.instance.collection('requesters').doc(user.uid).update({'profileImageUrl': url});
+
+      setState(() => _profileImageUrl = url);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile picture updated!'), backgroundColor: _teal));
+      }
+    } catch (e) {
+      debugPrint("Upload failed: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e'), backgroundColor: Colors.red));
+      }
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -182,6 +220,8 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
           _ProfileSliverAppBar(
             name: _nameController.text,
             bloodType: _selectedBloodType,
+            profileImageUrl: _profileImageUrl,
+            onUpdateProfilePic: _updateProfilePicture,
             onSave: _saveProfile,
           ),
           SliverToBoxAdapter(
@@ -279,11 +319,15 @@ class _RequesterProfileScreenState extends State<RequesterProfileScreen> {
 class _ProfileSliverAppBar extends StatelessWidget {
   final String name;
   final String bloodType;
+  final String? profileImageUrl;
+  final VoidCallback onUpdateProfilePic;
   final VoidCallback onSave;
 
   const _ProfileSliverAppBar({
     required this.name,
     required this.bloodType,
+    required this.profileImageUrl,
+    required this.onUpdateProfilePic,
     required this.onSave,
   });
 
@@ -336,28 +380,57 @@ class _ProfileSliverAppBar extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(height: 40),
+                const SizedBox(height: 30),
                 Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+                    GestureDetector(
+                      onTap: onUpdateProfilePic,
+                      child: Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.15),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+                              image: profileImageUrl != null
+                                  ? DecorationImage(
+                                      image: NetworkImage(profileImageUrl!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                            ),
+                            child: profileImageUrl == null
+                                ? const Icon(Icons.person_rounded, size: 40, color: Colors.white)
+                                : null,
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: _teal,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+                          ),
+                        ],
                       ),
-                      child: const Icon(Icons.person_rounded, size: 38, color: Colors.white),
                     ),
                     if (bloodType != 'Unknown')
                       Positioned(
-                        bottom: 0,
-                        right: 0,
+                        bottom: -4,
+                        left: -10, // Moved to the left to not clash with the camera icon
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)
+                            ]
                           ),
                           child: Text(
                             bloodType,
@@ -371,7 +444,7 @@ class _ProfileSliverAppBar extends StatelessWidget {
                       ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 14),
                 Text(
                   name.isEmpty ? 'Medical ID' : name,
                   style: const TextStyle(
@@ -797,7 +870,6 @@ class _OfflineRegionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // FIX: Wrapped in GestureDetector to make it clickable
     return GestureDetector(
       onTap: () {
         Navigator.push(

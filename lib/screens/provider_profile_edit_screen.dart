@@ -44,6 +44,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
   // ── State ────────────────────────────────────────────────────────────────────
   bool _isLoading = true;
   bool _isSaving = false;
+  String? _profileImageUrl;
   String _verificationStatus = 'pending';
   String? _existingCertUrl;
   List<String> _existingFacilityUrls = [];
@@ -77,6 +78,36 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
     super.dispose();
   }
 
+  Future<void> _updateProfilePicture() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (pickedFile == null) return;
+
+    setState(() => _isSaving = true);
+    try {
+      final user = _authService.currentUser;
+      if (user == null) return;
+
+      final file = File(pickedFile.path);
+      final ref = FirebaseStorage.instance.ref().child('profile_pictures/providers/${user.uid}.jpg');
+      await ref.putFile(file);
+      final url = await ref.getDownloadURL();
+
+      await _firestore.collection('providers').doc(user.uid).update({'profileImageUrl': url});
+
+      setState(() => _profileImageUrl = url);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile picture updated!'), backgroundColor: _teal));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e'), backgroundColor: Colors.red));
+      }
+    } finally {
+      setState(() => _isSaving = false);
+    }
+  }
+
   // ── Load ─────────────────────────────────────────────────────────────────────
   Future<void> _loadProviderData() async {
     final user = _authService.currentUser;
@@ -86,6 +117,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
       if (doc.exists && doc.data() != null) {
         final d = doc.data()!;
         _nameController.text = d['name'] ?? '';
+        _profileImageUrl = d['profileImageUrl'] as String?;
         _phoneController.text = d['phone'] ?? '';
         _addressController.text = d['address'] ?? '';
         _descriptionController.text = d['description'] ?? '';
@@ -250,7 +282,6 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
 
     return Scaffold(
       backgroundColor: _bgColor,
-      // Removed the BottomActionBar to declutter
       body: Form(
         key: _formKey,
         child: CustomScrollView(
@@ -260,6 +291,8 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
               child: _HeroHeader(
                 name: _nameController.text,
                 address: _addressController.text,
+                profileImageUrl: _profileImageUrl,
+                onUpdateProfilePic: _updateProfilePicture,
                 isAvailable: _isAvailable,
                 verificationStatus: _verificationStatus,
                 avgRating: _avgRating,
@@ -338,12 +371,14 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
 // ─────────────────────────────────────────────────────────────────────────────
 class _HeroHeader extends StatelessWidget {
   final String name, address, verificationStatus, providerType;
+  final String? profileImageUrl;
   final bool isAvailable, isSaving;
   final double avgRating;
   final int reviewCount;
   final List<String> facilityUrls;
   final void Function(bool) onAvailableToggle;
   final VoidCallback onSave;
+  final VoidCallback onUpdateProfilePic;
 
   const _HeroHeader({
     required this.name,
@@ -357,6 +392,8 @@ class _HeroHeader extends StatelessWidget {
     required this.onAvailableToggle,
     required this.onSave,
     required this.isSaving,
+    required this.profileImageUrl,
+    required this.onUpdateProfilePic,
   });
 
   @override
@@ -433,35 +470,43 @@ class _HeroHeader extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            // Facility thumbnail
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 12,
+            // Profile Picture with Camera Badge
+            GestureDetector(
+              onTap: isSaving ? null : onUpdateProfilePic,
+              child: Stack(
+                alignment: Alignment.bottomRight,
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12),
+                      ],
+                      image: profileImageUrl != null
+                          ? DecorationImage(
+                              image: NetworkImage(profileImageUrl!),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                    ),
+                    child: profileImageUrl == null
+                        ? const Icon(Icons.local_hospital_rounded, size: 36, color: _teal)
+                        : null,
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: _teal,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
                   ),
                 ],
-                image:
-                    facilityUrls.isNotEmpty
-                        ? DecorationImage(
-                          image: NetworkImage(facilityUrls.first),
-                          fit: BoxFit.cover,
-                        )
-                        : null,
               ),
-              child:
-                  facilityUrls.isEmpty
-                      ? const Icon(
-                        Icons.local_hospital_rounded,
-                        size: 36,
-                        color: _teal,
-                      )
-                      : null,
             ),
             const SizedBox(height: 12),
 
@@ -1240,7 +1285,8 @@ class _LiveInventoryGrid extends StatelessWidget {
         crossAxisCount: 2,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
-        childAspectRatio: 1.6,
+        // FIX: Applied the 0.85 ratio here to eliminate bottom text overflow!
+        childAspectRatio: 0.85, 
       ),
       itemCount: display.length,
       itemBuilder: (_, i) {
