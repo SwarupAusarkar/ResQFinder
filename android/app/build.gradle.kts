@@ -16,7 +16,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.emergency_resource_locator"
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName

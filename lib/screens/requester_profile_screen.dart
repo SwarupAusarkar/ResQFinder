@@ -334,7 +334,7 @@ class _ProfileSliverAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SliverAppBar(
-      expandedHeight: 200,
+      expandedHeight: 180,
       pinned: true,
       backgroundColor: const Color(0xFF0D4F4A),
       elevation: 0,

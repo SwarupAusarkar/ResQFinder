@@ -436,7 +436,13 @@ class _ProviderCardFooter extends StatelessWidget {
     );
   }
 }
-
+class ProviderName extends StatelessWidget{
+  @override
+  Widget build(BuildContext context) {
+    // TODO: implement build
+    throw UnimplementedError();
+  }
+}
 class _FooterChip extends StatelessWidget {
   final IconData icon;
   final String label;

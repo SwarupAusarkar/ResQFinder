@@ -3,6 +3,7 @@ import 'package:emergency_res_loc_new/screens/InventoryManagementScreen.dart';
 import 'package:emergency_res_loc_new/screens/ProviderHistoryPage.dart';
 import 'package:emergency_res_loc_new/screens/ProviderMapScreen.dart';
 import 'package:emergency_res_loc_new/screens/myOffersPage.dart';
+import 'package:emergency_res_loc_new/screens/newRequestPage.dart';
 import 'package:emergency_res_loc_new/screens/provider_main_screen.dart';
 import 'package:emergency_res_loc_new/screens/provider_profile_edit_screen.dart';
 import 'package:emergency_res_loc_new/screens/provider_registration_screen.dart';
@@ -186,6 +187,7 @@ class _EmergencyResourceLocatorAppState
         '/provider-profile':(context)=> const ProviderProfileEditScreen(),
         '/provider-details': (context) => const ProviderDetailsScreen(),
         '/map': (context) => const MapScreen(),
+        '/new-request-list':(context)=> NewRequestsPage(),
         '/citizen-registration': (context) => const CitizenRegisterScreen(),
         '/provider-home': (context) => const ProviderDashboardScreen(initialTab: 'new'),
         '/provider-dashboard': (context) => const ProviderDashboardScreen(initialTab: 'new'),
