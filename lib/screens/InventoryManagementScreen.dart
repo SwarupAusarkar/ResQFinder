@@ -201,11 +201,7 @@ class _InventoryMgmtScreenState extends State<InventoryMgmtScreen> {
               ),
             ],
           ),
-          floatingActionButton: FloatingActionButton(
-            backgroundColor: const Color(0xFF0D9488),
-            child: const Icon(Icons.add, color: Colors.white),
-            onPressed: () => _showAddMasterListPicker(context, inventory),
-          ),
+
         );
       },
     );
@@ -237,17 +233,7 @@ class _InventorySliverHeader extends StatelessWidget {
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
         onPressed: () => Navigator.pop(context),
       ),
-      actions: [
-        IconButton(icon: const Icon(Icons.notifications_none_rounded, color: Colors.white), onPressed: () {}),
-        Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: CircleAvatar(
-            radius: 16,
-            backgroundColor: Colors.white24,
-            child: const Icon(Icons.person, color: Colors.white, size: 18),
-          ),
-        ),
-      ],
+
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
           color: const Color(0xFF0D4F4A),
